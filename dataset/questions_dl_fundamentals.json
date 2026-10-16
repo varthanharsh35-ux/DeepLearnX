@@ -1,0 +1,783 @@
+{
+  "concepts": [
+    {
+      "id": "derivatives",
+      "name": "Calculus & Derivatives",
+      "slug": "derivatives",
+      "category": "Foundations",
+      "description": "Rates of change, slopes of tangent lines, and partial derivatives.",
+      "prerequisites": [],
+      "order_index": 1
+    },
+    {
+      "id": "chain_rule",
+      "name": "Chain Rule",
+      "slug": "chain_rule",
+      "category": "Foundations",
+      "description": "Calculus rule for differentiating composite functions f(g(x)).",
+      "prerequisites": [
+        "derivatives"
+      ],
+      "order_index": 2
+    },
+    {
+      "id": "linear_algebra",
+      "name": "Linear Algebra & Dot Products",
+      "slug": "linear_algebra",
+      "category": "Foundations",
+      "description": "Vectors, matrices, dot products, and linear transformations Wx + b.",
+      "prerequisites": [],
+      "order_index": 3
+    },
+    {
+      "id": "ann_basics",
+      "name": "Artificial Neural Networks (ANN)",
+      "slug": "ann_basics",
+      "category": "Core Architecture",
+      "description": "Biological inspirations, perceptrons, multilayer perceptrons (MLP), and feedforward topology.",
+      "prerequisites": [
+        "linear_algebra"
+      ],
+      "order_index": 4
+    },
+    {
+      "id": "activation_funcs",
+      "name": "Activation Functions",
+      "slug": "activation_funcs",
+      "category": "Core Architecture",
+      "description": "Non-linear mappings: Sigmoid, Tanh, ReLU, Leaky ReLU, and Softmax.",
+      "prerequisites": [
+        "ann_basics"
+      ],
+      "order_index": 5
+    },
+    {
+      "id": "forward_prop",
+      "name": "Forward Propagation & Loss",
+      "slug": "forward_prop",
+      "category": "Learning Mechanism",
+      "description": "Sequential computation of pre-activations, activations, and objective loss (MSE, Cross-Entropy).",
+      "prerequisites": [
+        "ann_basics",
+        "activation_funcs"
+      ],
+      "order_index": 6
+    },
+    {
+      "id": "gradient_descent",
+      "name": "Gradient Descent & Optimization",
+      "slug": "gradient_descent",
+      "category": "Learning Mechanism",
+      "description": "Iterative optimization via negative gradients, learning rates, SGD, and Adam.",
+      "prerequisites": [
+        "derivatives",
+        "forward_prop"
+      ],
+      "order_index": 7
+    },
+    {
+      "id": "backpropagation",
+      "name": "Backpropagation",
+      "slug": "backpropagation",
+      "category": "Learning Mechanism",
+      "description": "Reverse-mode automatic differentiation applying the Chain Rule to compute dL/dW.",
+      "prerequisites": [
+        "chain_rule",
+        "forward_prop",
+        "gradient_descent"
+      ],
+      "order_index": 8
+    },
+    {
+      "id": "overfitting",
+      "name": "Overfitting & Generalization",
+      "slug": "overfitting",
+      "category": "Evaluation & Tuning",
+      "description": "High variance vs high bias, training error vs validation error divergence.",
+      "prerequisites": [
+        "gradient_descent"
+      ],
+      "order_index": 9
+    },
+    {
+      "id": "regularization",
+      "name": "Regularization Techniques",
+      "slug": "regularization",
+      "category": "Evaluation & Tuning",
+      "description": "Preventing co-adaptation and large weights using Dropout, L1 Lasso, and L2 Ridge.",
+      "prerequisites": [
+        "overfitting",
+        "backpropagation"
+      ],
+      "order_index": 10
+    },
+    {
+      "id": "cnn",
+      "name": "Convolutional Neural Networks (CNN)",
+      "slug": "cnn",
+      "category": "Deep Architectures",
+      "description": "Spatial feature extraction, convolutional filters, stride, padding, and pooling.",
+      "prerequisites": [
+        "forward_prop",
+        "backpropagation"
+      ],
+      "order_index": 11
+    },
+    {
+      "id": "rnn",
+      "name": "Recurrent Neural Networks (RNN)",
+      "slug": "rnn",
+      "category": "Deep Architectures",
+      "description": "Sequential temporal processing, recurrent hidden states, and vanishing gradients over time.",
+      "prerequisites": [
+        "forward_prop",
+        "backpropagation"
+      ],
+      "order_index": 12
+    }
+  ],
+  "misconceptions": [
+    {
+      "id": "MISC_CHAIN_RULE_SUM",
+      "code": "M-CR-01",
+      "concept_id": "chain_rule",
+      "name": "Summing Instead of Multiplying Derivatives",
+      "description": "Student mistakenly believes that the Chain Rule adds derivative components (dy/dx = dy/du + du/dx) instead of multiplying them (dy/dx = dy/du * du/dx).",
+      "remediation": "Review calculus composite function rules: the rate of change of composite functions is multiplicative because inner variations scale outer variations."
+    },
+    {
+      "id": "MISC_ACTIVATION_LOSS",
+      "code": "M-ACT-02",
+      "concept_id": "activation_funcs",
+      "name": "Confusing Activation Functions with Loss Functions",
+      "description": "Student confuses neuron non-linear squashing functions (ReLU, Sigmoid) with cost/loss evaluation functions (MSE, Cross-Entropy).",
+      "remediation": "Remember: Activation functions operate on individual neurons to introduce non-linearity. Loss functions measure total network prediction error against ground truth targets."
+    },
+    {
+      "id": "MISC_RELU_BOUNDED",
+      "code": "M-ACT-03",
+      "concept_id": "activation_funcs",
+      "name": "Believing ReLU is Bounded like Sigmoid",
+      "description": "Student assumes ReLU compresses activations into a fixed range [0, 1] rather than being f(x) = max(0, x), which is unbounded on positive values.",
+      "remediation": "ReLU outputs 0 for negative inputs and preserves positive values as-is (unbounded above). This constant gradient of 1 prevents vanishing gradient."
+    },
+    {
+      "id": "MISC_GRAD_FLOW_DIR",
+      "code": "M-BP-04",
+      "concept_id": "backpropagation",
+      "name": "Inverting Gradient Flow Direction",
+      "description": "Student believes gradients propagate from the input layer toward the output layer during backpropagation.",
+      "remediation": "Forward propagation flows from inputs to outputs to compute predictions. Backpropagation computes error derivatives in reverse: from the output loss layer back to early input layers."
+    },
+    {
+      "id": "MISC_LEARNING_RATE_INF",
+      "code": "M-GD-05",
+      "concept_id": "gradient_descent",
+      "name": "Assuming Higher Learning Rate Always Faster",
+      "description": "Student assumes setting an arbitrarily large learning rate will always speed up convergence without causing loss divergence or oscillation.",
+      "remediation": "A learning rate that is too high causes gradient descent to overshoot minima, oscillate wildly, or mathematically diverge toward infinity/NaN."
+    },
+    {
+      "id": "MISC_DROPOUT_CAPACITY",
+      "code": "M-REG-06",
+      "concept_id": "regularization",
+      "name": "Believing Dropout Increases Model Capacity",
+      "description": "Student believes Dropout adds parameters or expands network learning capacity, rather than acting as a regularizer preventing co-adaptation.",
+      "remediation": "Dropout randomly zeroes out activations during training to reduce overfitting and force redundant representations. It restricts capacity rather than expanding it."
+    },
+    {
+      "id": "MISC_L1_L2_SWAP",
+      "code": "M-REG-07",
+      "concept_id": "regularization",
+      "name": "Swapping L1 Sparsity and L2 Weight Decay Properties",
+      "description": "Student confuses L1 (Lasso) penalty which drives weights strictly to zero with L2 (Ridge) which smoothly decays weights toward zero without exact sparsity.",
+      "remediation": "L1 penalty (|w|) produces sparse weight vectors (feature selection). L2 penalty (w^2) shrinks all weights proportionally toward zero but rarely sets them exactly to zero."
+    },
+    {
+      "id": "MISC_POOLING_WEIGHTS",
+      "code": "M-CNN-08",
+      "concept_id": "cnn",
+      "name": "Assuming Pooling Layers Have Learnable Weights",
+      "description": "Student assumes Max/Average Pooling layers contain trainable weight matrices and biases updated by backpropagation.",
+      "remediation": "Pooling operations (Max-Pool, Avg-Pool) are fixed mathematical downsampling functions without any trainable parameters."
+    },
+    {
+      "id": "MISC_RNN_INFINITE_MEMORY",
+      "code": "M-RNN-09",
+      "concept_id": "rnn",
+      "name": "Assuming Vanilla RNNs Have Infinite Long-Term Context",
+      "description": "Student assumes basic vanilla RNNs effortlessly remember arbitrary long-term sequences without suffering from vanishing or exploding gradients.",
+      "remediation": "Vanilla RNNs suffer from vanishing gradients when backpropagated across many time steps, causing catastrophic forgetting of early sequence tokens."
+    },
+    {
+      "id": "MISC_OVERFIT_INVERTED",
+      "code": "M-OVR-10",
+      "concept_id": "overfitting",
+      "name": "Inverting Training vs Validation Overfitting Symptoms",
+      "description": "Student believes overfitting is characterized by high training loss and low validation loss.",
+      "remediation": "Overfitting occurs when a model memorizes the training data: training loss is exceptionally low while validation/test loss is significantly higher and increasing."
+    }
+  ],
+  "questions": [
+    {
+      "id": "q_ann_basic_1",
+      "concept_id": "ann_basics",
+      "question_type": "basic",
+      "difficulty": "Easy",
+      "question_text": "What are the two primary mathematical operations performed by a single Artificial Neuron on its inputs?",
+      "options": {
+        "A": "Linear combination (dot product with weights plus bias) followed by non-linear activation",
+        "B": "Fourier transform followed by continuous integration",
+        "C": "Cross-entropy loss calculation followed by gradient ascent",
+        "D": "Matrix inversion followed by batch normalization"
+      },
+      "correct_option": "A",
+      "explanation": "A neuron computes z = Wx + b (linear combination) and then passes z through an activation function a = sigma(z).",
+      "misconception_id": null,
+      "prerequisite_id": "linear_algebra"
+    },
+    {
+      "id": "q_ann_concept_1",
+      "concept_id": "ann_basics",
+      "question_type": "conceptual",
+      "difficulty": "Medium",
+      "question_text": "Why can a single-layer Perceptron without hidden layers solve the AND and OR logic gates, but fails to solve the XOR gate?",
+      "options": {
+        "A": "Because XOR requires complex imaginary numbers which perceptrons cannot represent",
+        "B": "Because XOR is not linearly separable and a single hyperplane cannot separate the classes",
+        "C": "Because XOR inputs have negative values which cause perceptron gradients to collapse",
+        "D": "Because the single-layer perceptron always has an infinite learning rate"
+      },
+      "correct_option": "B",
+      "explanation": "Minsky and Papert proved that a single-layer perceptron can only learn linearly separable decision boundaries. XOR requires a non-linear decision boundary or multi-layer architecture.",
+      "misconception_id": null,
+      "prerequisite_id": "linear_algebra"
+    },
+    {
+      "id": "q_ann_app_1",
+      "concept_id": "ann_basics",
+      "question_type": "application",
+      "difficulty": "Hard",
+      "question_text": "You stack 10 dense linear layers without any non-linear activation functions in between. What is the effective representational capacity of this deep network?",
+      "options": {
+        "A": "It can approximate any complex non-linear polynomial of degree 10",
+        "B": "It automatically acts as a high-dimensional kernel SVM with radial basis functions",
+        "C": "It collapses into an equivalent single linear transformation W_eff * x + b_eff, losing deep non-linear expressiveness",
+        "D": "It exhibits exponential capacity growth proportional to 2^10 parameters"
+      },
+      "correct_option": "C",
+      "explanation": "Composition of linear transformations is strictly linear: W_2(W_1 x + b_1) + b_2 = (W_2 W_1)x + (W_2 b_1 + b_2). Without non-linear activations, depth provides no extra non-linear representational power.",
+      "misconception_id": null,
+      "prerequisite_id": "linear_algebra",
+      "reasoning_probe": {
+        "prompt": "Why is an activation function essential between linear transformation layers W*x + b?",
+        "options": {
+          "A": "Without non-linear activations, consecutive linear layers collapse into a single affine transformation",
+          "B": "Activations prevent network weights from ever taking negative values",
+          "C": "Linear layers cannot accept floating-point input features",
+          "D": "Activations replace backpropagation with closed-form inversion"
+        },
+        "correct_probe": "A"
+      }
+    },
+    {
+      "id": "q_act_basic_1",
+      "concept_id": "activation_funcs",
+      "question_type": "basic",
+      "difficulty": "Easy",
+      "question_text": "What is the mathematical definition and output range of the standard ReLU (Rectified Linear Unit) activation function?",
+      "options": {
+        "A": "f(x) = min(1, max(0, x)), with strictly bounded range [0, 1]",
+        "B": "f(x) = 1 / (1 + e^-x), with output range (0, 1)",
+        "C": "f(x) = (e^x - e^-x) / (e^x + e^-x), with output range (-1, 1)",
+        "D": "f(x) = max(0, x), with output range [0, infinity)"
+      },
+      "correct_option": "D",
+      "explanation": "ReLU is defined as max(0, x). For positive inputs, output equals input, which is unbounded above [0, inf).",
+      "misconception_id": "MISC_RELU_BOUNDED",
+      "prerequisite_id": "ann_basics"
+    },
+    {
+      "id": "q_act_concept_1",
+      "concept_id": "activation_funcs",
+      "question_type": "conceptual",
+      "difficulty": "Medium",
+      "question_text": "Why does the ReLU activation function significantly mitigate the vanishing gradient problem compared to the Sigmoid function in deep feedforward networks?",
+      "options": {
+        "A": "Because ReLU bounds all layer outputs strictly between 0 and 1",
+        "B": "Because for positive inputs (x > 0), the derivative of ReLU is constant at 1, preventing exponential gradient decay during backpropagation",
+        "C": "Because ReLU directly computes the categorical cross-entropy loss during the forward pass",
+        "D": "Because ReLU doubles the weights of the hidden layer during backpropagation"
+      },
+      "correct_option": "B",
+      "explanation": "Sigmoid derivative peaks at 0.25 and vanishes near saturation. In contrast, ReLU derivative is 1 for all positive inputs, allowing gradient signals to backpropagate without exponential dampening.",
+      "misconception_id": "MISC_ACTIVATION_LOSS",
+      "prerequisite_id": "derivatives"
+    },
+    {
+      "id": "q_act_app_1",
+      "concept_id": "activation_funcs",
+      "question_type": "application",
+      "difficulty": "Hard",
+      "question_text": "During training of an 8-layer MLP using standard ReLU, 70% of neurons in layer 3 output exactly 0 for all training batches and never recover. What phenomenon has occurred, and how can it be diagnosed?",
+      "options": {
+        "A": "Overfitting: the model is memorizing the dataset perfectly by zeroing weights",
+        "B": "Network Convergence: the model has reached global optimum and pruned unneeded weights",
+        "C": "Dying ReLU problem: large negative gradients shifted weights so pre-activations are always negative (gradient is 0); solve by using Leaky ReLU or lower learning rate",
+        "D": "Forward saturation: the loss function is converting activations to binary logits"
+      },
+      "correct_option": "C",
+      "explanation": "The 'Dying ReLU' problem occurs when a neuron's weights update such that it always produces negative input to ReLU. Since the gradient for x < 0 is 0, the neuron never updates again. Leaky ReLU or ELU prevents this by allowing a small non-zero slope.",
+      "misconception_id": null,
+      "prerequisite_id": "derivatives"
+    },
+    {
+      "id": "q_fwd_basic_1",
+      "concept_id": "forward_prop",
+      "question_type": "basic",
+      "difficulty": "Easy",
+      "question_text": "In a neural network classification task, what is the role of Forward Propagation?",
+      "options": {
+        "A": "Dropping 50% of the training images to prevent data leakage",
+        "B": "Calculating partial derivatives of the loss with respect to weights using the chain rule",
+        "C": "Updating the weights using stochastic gradient descent step size",
+        "D": "Passing input features through layer weights and activations to compute layer outputs and final loss"
+      },
+      "correct_option": "D",
+      "explanation": "Forward propagation flows from input to output: computing linear combinations, non-linear activations, and finally computing the objective loss against ground truth.",
+      "misconception_id": null,
+      "prerequisite_id": "ann_basics"
+    },
+    {
+      "id": "q_fwd_concept_1",
+      "concept_id": "forward_prop",
+      "question_type": "conceptual",
+      "difficulty": "Medium",
+      "question_text": "Why is Categorical Cross-Entropy preferred over Mean Squared Error (MSE) when training neural networks for multi-class classification with Softmax outputs?",
+      "options": {
+        "A": "Cross-entropy paired with Softmax provides steeper gradients when predictions are wrong, avoiding learning slowdowns caused by MSE derivative saturation",
+        "B": "Because MSE cannot handle floating point numbers greater than 1.0",
+        "C": "Because Cross-Entropy converts the neural network into an unsupervised autoencoder",
+        "D": "Because MSE requires computing matrix determinants which is NP-hard"
+      },
+      "correct_option": "A",
+      "explanation": "With MSE and Softmax/Sigmoid, when the prediction is completely confident and wrong, the derivative of Softmax approaches 0, slowing down learning. Cross-Entropy cancels out the sigmoid derivative saturation, yielding linear error gradient (y_hat - y).",
+      "misconception_id": "MISC_ACTIVATION_LOSS",
+      "prerequisite_id": "derivatives"
+    },
+    {
+      "id": "q_fwd_app_1",
+      "concept_id": "forward_prop",
+      "question_type": "application",
+      "difficulty": "Hard",
+      "question_text": "A network has input x = [1, 2], weight matrix W = [[0.5, -0.5], [1.0, 0.0]] (with output z = x * W^T), and bias b = [0.1, -0.2]. Using ReLU activation, what is the activation vector a?",
+      "options": {
+        "A": "[1.0, 2.0] because ReLU always preserves the input vector unchanged",
+        "B": "[0.5, 1.2] because negative pre-activations are reflected positively",
+        "C": "[0.0, 0.8] after evaluating z_1 = 1(0.5)+2(-0.5)+0.1 = -0.4 -> ReLU(-0.4)=0; z_2 = 1(1.0)+2(0.0)-0.2 = 0.8 -> ReLU(0.8)=0.8",
+        "D": "[-0.4, 0.8] without applying the non-linear activation threshold"
+      },
+      "correct_option": "C",
+      "explanation": "z1 = (1*0.5 + 2*-0.5) + 0.1 = -0.5 + 0.1 = -0.4. ReLU(-0.4) = 0. z2 = (1*1.0 + 2*0.0) - 0.2 = 1.0 - 0.2 = 0.8. ReLU(0.8) = 0.8. Output is [0.0, 0.8].",
+      "misconception_id": null,
+      "prerequisite_id": "linear_algebra"
+    },
+    {
+      "id": "q_bp_basic_1",
+      "concept_id": "backpropagation",
+      "question_type": "basic",
+      "difficulty": "Easy",
+      "question_text": "What fundamental calculus theorem does Backpropagation use to efficiently compute the gradient of the loss with respect to all network weights?",
+      "options": {
+        "A": "Euler's Formula for complex exponentials",
+        "B": "Pythagorean Theorem for Euclidean distances",
+        "C": "L'Hopital's Rule for indeterminate limits",
+        "D": "The Chain Rule of Calculus applied in reverse topological order"
+      },
+      "correct_option": "D",
+      "explanation": "Backpropagation is reverse-mode automatic differentiation applying the Chain Rule of calculus from output loss back through intermediate layers.",
+      "misconception_id": null,
+      "prerequisite_id": "chain_rule"
+    },
+    {
+      "id": "q_bp_concept_1",
+      "concept_id": "backpropagation",
+      "question_type": "conceptual",
+      "difficulty": "Medium",
+      "question_text": "If a student claims: 'During backpropagation, we compute gradients starting from the input features and propagate forward to the loss function', what is the fundamental conceptual error?",
+      "options": {
+        "A": "Gradients propagate backward from the loss at the output layer toward early layers,",
+        "B": "There is no error; gradients always propagate in the same direction as data flow",
+        "C": "The error is that gradients only exist in the loss layer and are never propagated across weights",
+        "D": "The error is that backpropagation does not use calculus at all"
+      },
+      "correct_option": "A",
+      "explanation": "Backpropagation computes dL/dW by starting with dL/dy_pred at the final output layer and propagating backward through successive layers using the Chain Rule.",
+      "misconception_id": "MISC_GRAD_FLOW_DIR",
+      "prerequisite_id": "chain_rule"
+    },
+    {
+      "id": "q_bp_app_1",
+      "concept_id": "backpropagation",
+      "question_type": "application",
+      "difficulty": "Hard",
+      "question_text": "In a scalar computational graph, Loss L = (y_pred - y)^2. Let y_pred = a = sigma(z), where z = w * x + b. If (dL/da) = 2.0 and (da/dz) = 0.25 and x = 4.0, what is the gradient of Loss with respect to weight w (dL/dw)?",
+      "options": {
+        "A": "6.25 (calculated as dL/da + da/dz + dz/dw = 2.0 + 0.25 + 4.0)",
+        "B": "2.0 (calculated as dL/da * da/dz * dz/dw = 2.0 * 0.25 * 4.0 = 2.0)",
+        "C": "0.5 (calculated as dL/da * da/dz = 2.0 * 0.25 without multiplying by input x)",
+        "D": "8.0 (calculated as 2.0 * 4.0 ignoring activation derivative)"
+      },
+      "correct_option": "B",
+      "explanation": "By the Chain Rule: dL/dw = (dL/da) * (da/dz) * (dz/dw). Since dz/dw = x = 4.0, we have dL/dw = 2.0 * 0.25 * 4.0 = 2.0. Adding terms (option B) is the classic Chain Rule Summation misconception!",
+      "misconception_id": "MISC_CHAIN_RULE_SUM",
+      "prerequisite_id": "chain_rule",
+      "reasoning_probe": {
+        "prompt": "Which fundamental calculus rule enables the recursive calculation of error gradients back through composite layers?",
+        "options": {
+          "A": "Chain Rule of Differential Calculus for composite functions",
+          "B": "Product Rule of Partial Derivatives without layer composition",
+          "C": "Integration by Parts across non-linear affine layers",
+          "D": "First-order Taylor Series polynomial approximation"
+        },
+        "correct_probe": "A"
+      }
+    },
+    {
+      "id": "q_gd_basic_1",
+      "concept_id": "gradient_descent",
+      "question_type": "basic",
+      "difficulty": "Easy",
+      "question_text": "In the standard Gradient Descent weight update rule w_new = w_old - eta * grad(L), what does the parameter eta (eta) represent?",
+      "options": {
+        "A": "Regularization penalty weight",
+        "B": "Momentum coefficient",
+        "C": "Batch size count",
+        "D": "Learning rate (step size multiplier)"
+      },
+      "correct_option": "D",
+      "explanation": "Eta is the learning rate, which controls the step size taken along the direction of the negative gradient.",
+      "misconception_id": null,
+      "prerequisite_id": "derivatives"
+    },
+    {
+      "id": "q_gd_concept_1",
+      "concept_id": "gradient_descent",
+      "question_type": "conceptual",
+      "difficulty": "Medium",
+      "question_text": "A student sets the learning rate eta = 100.0 on a sensitive neural network loss landscape expecting to reach the minimum in 1 epoch. What is the most likely outcome?",
+      "options": {
+        "A": "The updates will overshoot the valley, oscillate wildly, and cause loss to diverge or become NaN",
+        "B": "The model will instantly converge to the true global optimum without error",
+        "C": "The model weights will automatically freeze to zero",
+        "D": "The training time will increase linearly by a factor of 100"
+      },
+      "correct_option": "A",
+      "explanation": "Excessively high learning rates cause gradient steps to overshoot local minima, resulting in divergence, oscillation, or numerical overflow (NaN).",
+      "misconception_id": "MISC_LEARNING_RATE_INF",
+      "prerequisite_id": "derivatives"
+    },
+    {
+      "id": "q_gd_app_1",
+      "concept_id": "gradient_descent",
+      "question_type": "application",
+      "difficulty": "Hard",
+      "question_text": "During training with Mini-batch SGD on an ill-conditioned loss surface with high curvature in one direction and a gentle slope in another, the optimizer oscillates violently perpendicular to the valley without making progress. Which optimization enhancement specifically combats this?",
+      "options": {
+        "A": "Increasing batch size to infinity without momentum",
+        "B": "Momentum or Adam optimizer, which accumulates velocity in consistent directions and dampens perpendicular oscillations",
+        "C": "Switching to pure random search weight updates",
+        "D": "Removing all bias terms from the network architecture"
+      },
+      "correct_option": "B",
+      "explanation": "Momentum adds an exponentially decaying moving average of past gradients: v = beta * v + (1-beta)*grad. This dampens high-frequency oscillations in steep canyons while accelerating progress along gentle ravines.",
+      "misconception_id": null,
+      "prerequisite_id": "gradient_descent",
+      "reasoning_probe": {
+        "prompt": "Why does standard Gradient Descent take steps in the direction of the negative gradient -∇L?",
+        "options": {
+          "A": "The negative gradient represents the direction of steepest local descent on the loss surface",
+          "B": "The negative gradient guarantees the global optimum without saddle points",
+          "C": "Gradient vectors must always point along Cartesian coordinate axes",
+          "D": "Negative gradients prevent activation values from exploding"
+        },
+        "correct_probe": "A"
+      }
+    },
+    {
+      "id": "q_ovr_basic_1",
+      "concept_id": "overfitting",
+      "question_type": "basic",
+      "difficulty": "Easy",
+      "question_text": "Which of the following loss curve patterns is the hallmark indicator of an overfitting neural network model?",
+      "options": {
+        "A": "Training loss remains high while validation loss drops immediately to zero",
+        "B": "Both training loss and validation loss decrease steadily in parallel",
+        "C": "Training loss continues decreasing towards near zero, while validation loss starts increasing significantly",
+        "D": "Both training and validation losses remain static at initial random values"
+      },
+      "correct_option": "C",
+      "explanation": "Overfitting is characterized by generalization gap: the network fits training data noise (low training loss) while failing on unseen validation data (increasing validation loss).",
+      "misconception_id": "MISC_OVERFIT_INVERTED",
+      "prerequisite_id": "gradient_descent"
+    },
+    {
+      "id": "q_ovr_concept_1",
+      "concept_id": "overfitting",
+      "question_type": "conceptual",
+      "difficulty": "Medium",
+      "question_text": "Why does a 50-layer deep neural network trained on a tiny dataset of only 100 images tend to suffer from severe overfitting?",
+      "options": {
+        "A": "Because the number of trainable parameters vastly exceeds data constraints, giving the model excessive capacity to memorize noise rather than learning generalizable features",
+        "B": "Because deep neural networks can only execute linear transformations",
+        "C": "Because 100 images cause the GPU to run out of memory during backward pass",
+        "D": "Because deep networks automatically invert gradient descent into gradient ascent"
+      },
+      "correct_option": "A",
+      "explanation": "High model capacity relative to sample size leads to high variance: the network has sufficient degrees of freedom to memorize training instances verbatim.",
+      "misconception_id": null,
+      "prerequisite_id": "ann_basics"
+    },
+    {
+      "id": "q_ovr_app_1",
+      "concept_id": "overfitting",
+      "question_type": "application",
+      "difficulty": "Hard",
+      "question_text": "You observe training accuracy = 99.8% and validation accuracy = 61.2% on epoch 40. At epoch 15, validation accuracy peaked at 78.4%. Which immediate strategy prevents this degradation without changing model architecture?",
+      "options": {
+        "A": "Train for an additional 200 epochs until validation accuracy catches up to training accuracy",
+        "B": "Early Stopping: monitor validation loss and restore weights from the epoch with highest validation performance",
+        "C": "Multiply all weights by 10 to boost validation confidence",
+        "D": "Evaluate the model exclusively on the training set to maintain 99.8% metrics"
+      },
+      "correct_option": "B",
+      "explanation": "Early stopping halts training when validation loss stops improving and checkpoints the model at its peak generalization capability (epoch 15).",
+      "misconception_id": null,
+      "prerequisite_id": "gradient_descent"
+    },
+    {
+      "id": "q_reg_basic_1",
+      "concept_id": "regularization",
+      "question_type": "basic",
+      "difficulty": "Easy",
+      "question_text": "How does Dropout regularization operate during the training phase of a neural network?",
+      "options": {
+        "A": "Doubles the number of neurons to increase total parameters",
+        "B": "Permanently deletes weights with negative values from disk",
+        "C": "Randomly sets a fraction p of hidden neuron activations to zero during each forward training pass",
+        "D": "Stops training whenever the loss function dips below 0.01"
+      },
+      "correct_option": "C",
+      "explanation": "Dropout randomly deactivates a chosen fraction (e.g., p=0.5) of units in a layer during each training step, preventing neurons from co-adapting.",
+      "misconception_id": "MISC_DROPOUT_CAPACITY",
+      "prerequisite_id": "overfitting"
+    },
+    {
+      "id": "q_reg_concept_1",
+      "concept_id": "regularization",
+      "question_type": "conceptual",
+      "difficulty": "Medium",
+      "question_text": "What is the key geometric and mathematical difference between L1 Regularization (Lasso) and L2 Regularization (Ridge / Weight Decay)?",
+      "options": {
+        "A": "L1 increases model overfitting while L2 removes the need for backpropagation",
+        "B": "L2 creates sparse zero weights while L1 doubles weight magnitudes",
+        "C": "L1 is applied only during testing, while L2 is applied only to biases",
+        "D": "L1 penalizes absolute weights |w| and encourages strict sparsity (setting weights to exact 0), whereas L2 penalizes squared weights w^2 and shrinks weights smoothly toward 0"
+      },
+      "correct_option": "D",
+      "explanation": "Due to the sharp diamond constraint of L1 norm (|w|), optimal solutions often intersect coordinate axes, yielding exact zeros (sparse feature selection). L2 spherical constraint (w^2) penalizes large weights without forcing them to zero.",
+      "misconception_id": "MISC_L1_L2_SWAP",
+      "prerequisite_id": "overfitting"
+    },
+    {
+      "id": "q_reg_app_1",
+      "concept_id": "regularization",
+      "question_type": "application",
+      "difficulty": "Hard",
+      "question_text": "During evaluation/inference with a trained neural network that uses Dropout (p=0.5) with inverted dropout implemented, what must be done to the dropout layers?",
+      "options": {
+        "A": "Keep randomly dropping 50% of neurons to generate different predictions for each user",
+        "B": "Deactivate dropout completely (pass all activations through without masking), as all neurons should participate in final prediction",
+        "C": "Multiply all weights by 0 to keep the network regularized",
+        "D": "Invert the network weights by taking their mathematical reciprocal"
+      },
+      "correct_option": "B",
+      "explanation": "During inference (eval mode), dropout is switched off. Since inverted dropout scales activations by 1/(1-p) during training, no scaling is needed at test time, and all units contribute to the deterministic output.",
+      "misconception_id": "MISC_DROPOUT_CAPACITY",
+      "prerequisite_id": "overfitting",
+      "reasoning_probe": {
+        "prompt": "What mathematical penalty mechanism in L2 Regularization (Weight Decay) prevents model overfitting?",
+        "options": {
+          "A": "Penalizes the squared L2 Euclidean norm of weights in the optimization objective",
+          "B": "Clamps negative weight values to strictly zero after each step",
+          "C": "Inverts the sign of the learning rate during backward pass",
+          "D": "Decreases the number of training data mini-batches"
+        },
+        "correct_probe": "A"
+      }
+    },
+    {
+      "id": "q_cnn_basic_1",
+      "concept_id": "cnn",
+      "question_type": "basic",
+      "difficulty": "Easy",
+      "question_text": "What is the primary architectural advantage of using Convolutional Layers over fully connected Dense layers for image classification?",
+      "options": {
+        "A": "CNNs can only process 1D audio sequences rather than 2D grid pixels",
+        "B": "CNNs do not require backpropagation or calculus to train",
+        "C": "Parameter sharing and translation invariance: small kernels extract localized spatial features regardless of their image position",
+        "D": "CNNs completely replace loss functions with pooling operations"
+      },
+      "correct_option": "C",
+      "explanation": "Convolutional layers share weights across spatial positions (receptive fields), drastically cutting parameter counts and naturally capturing spatial translation invariance.",
+      "misconception_id": null,
+      "prerequisite_id": "forward_prop"
+    },
+    {
+      "id": "q_cnn_concept_1",
+      "concept_id": "cnn",
+      "question_type": "conceptual",
+      "difficulty": "Medium",
+      "question_text": "Does a standard Max-Pooling layer (e.g. 2x2 with stride 2) learn weights and biases during training via backpropagation?",
+      "options": {
+        "A": "Yes, it learns the optimal pooling size dynamically for each image",
+        "B": "Yes, it contains a 2x2 learnable weight matrix updated by gradient descent",
+        "C": "Yes, it learns a continuous bias scalar for each feature map",
+        "D": "No, Max-Pooling is a fixed deterministic downsampling function with zero trainable parameters"
+      },
+      "correct_option": "D",
+      "explanation": "Max pooling simply selects the maximum value within each window. It contains NO trainable weights or biases. Gradients simply route back to the index that produced the maximum value during forward pass.",
+      "misconception_id": "MISC_POOLING_WEIGHTS",
+      "prerequisite_id": "forward_prop"
+    },
+    {
+      "id": "q_cnn_app_1",
+      "concept_id": "cnn",
+      "question_type": "application",
+      "difficulty": "Hard",
+      "question_text": "An input feature map of dimensions 32x32 is passed through a convolutional layer with filter size 5x5, stride = 1, and no padding (padding = 0). What is the resulting output spatial dimension (H_out x W_out)?",
+      "options": {
+        "A": "28x28 (calculated as (32 - 5 + 2*0)/1 + 1 = 27 + 1 = 28)",
+        "B": "32x32 (spatial size remains unchanged without padding)",
+        "C": "27x27 (forgot to add 1 to the quotient)",
+        "D": "16x16 (stride 1 divides spatial dimension in half)"
+      },
+      "correct_option": "A",
+      "explanation": "The formula is O = floor((W - K + 2P)/S) + 1. Here, (32 - 5 + 0)/1 + 1 = 27 + 1 = 28. Resulting spatial dimension is 28x28.",
+      "misconception_id": null,
+      "prerequisite_id": "linear_algebra",
+      "reasoning_probe": {
+        "prompt": "Which inductive architectural bias of CNNs enables spatial feature extraction with minimal parameters?",
+        "options": {
+          "A": "Translation Equivariance via shared spatial kernel weights across pixels",
+          "B": "Full all-to-all connectivity across spatial tensor channels",
+          "C": "Recurrent temporal feedback loops across spatial image dimensions",
+          "D": "Stochastic random dropout of input channel pixels"
+        },
+        "correct_probe": "A"
+      }
+    },
+    {
+      "id": "q_rnn_basic_1",
+      "concept_id": "rnn",
+      "question_type": "basic",
+      "difficulty": "Easy",
+      "question_text": "What enables Recurrent Neural Networks (RNNs) to process sequential data such as text sentences or time-series?",
+      "options": {
+        "A": "Using 3D convolutional kernels across infinite channels",
+        "B": "Completely resetting all weights to zero at every new token",
+        "C": "A recurrent hidden state h_t that passes information from previous time steps to current time steps: h_t = tanh(W_hh * h_{t-1} + W_xh * x_t + b)",
+        "D": "Removing activation functions to avoid non-linear sequence warping"
+      },
+      "correct_option": "C",
+      "explanation": "RNNs maintain internal recurrent memory h_t carrying historical context across sequential iterations.",
+      "misconception_id": null,
+      "prerequisite_id": "forward_prop"
+    },
+    {
+      "id": "q_rnn_concept_1",
+      "concept_id": "rnn",
+      "question_type": "conceptual",
+      "difficulty": "Medium",
+      "question_text": "Why do standard vanilla RNNs fail when processing long sequences (e.g., 200+ steps), and how do LSTMs/GRUs solve this problem?",
+      "options": {
+        "A": "Because sequence inputs longer than 10 tokens cause memory leaks in the GPU",
+        "B": "Vanilla RNNs retain infinite long-term context effortlessly, but LSTMs are only used because they have fewer parameters",
+        "C": "Because vanilla RNNs cannot process floating point vectors",
+        "D": "Backpropagation Through Time (BPTT) causes repeated matrix multiplications, making gradients vanish or explode; LSTMs solve this with additive constant error carousels and gating mechanisms"
+      },
+      "correct_option": "D",
+      "explanation": "Repeated Jacobian multiplication over T time steps causes vanishing/exploding gradients. LSTMs introduce an additive cell state pathway controlled by forget, input, and output gates.",
+      "misconception_id": "MISC_RNN_INFINITE_MEMORY",
+      "prerequisite_id": "backpropagation"
+    },
+    {
+      "id": "q_rnn_app_1",
+      "concept_id": "rnn",
+      "question_type": "application",
+      "difficulty": "Hard",
+      "question_text": "In an LSTM cell, if the forget gate activation f_t is equal to 0.0 for a particular cell dimension across all time steps, what happens to the cell state C_t?",
+      "options": {
+        "A": "Past historical information in that memory cell is completely erased at every time step, retaining only current candidate input info",
+        "B": "The memory cell retains past values infinitely and rejects all new inputs",
+        "C": "The entire neural network undergoes numerical overflow",
+        "D": "The forget gate multiplies previous cell state by infinity"
+      },
+      "correct_option": "A",
+      "explanation": "The LSTM cell state update is C_t = f_t * C_{t-1} + i_t * C_tilde. If f_t = 0, f_t * C_{t-1} = 0, which completely purges old state history from memory.",
+      "misconception_id": null,
+      "prerequisite_id": "forward_prop"
+    },
+    {
+      "id": "q_cr_basic_1",
+      "concept_id": "chain_rule",
+      "question_type": "basic",
+      "difficulty": "Easy",
+      "question_text": "If y = f(u) and u = g(x), what is the correct formula for the derivative dy/dx according to the Chain Rule of Calculus?",
+      "options": {
+        "A": "(dy/du) + (du/dx)",
+        "B": "(dy/du) * (du/dx)",
+        "C": "(dy/du) / (du/dx)",
+        "D": "(dy/dx) = dy * du * dx"
+      },
+      "correct_option": "B",
+      "explanation": "The derivative of a composite function is the product of the derivative of the outer function with respect to the inner function and the derivative of the inner function with respect to the variable.",
+      "misconception_id": "MISC_CHAIN_RULE_SUM",
+      "prerequisite_id": "derivatives"
+    },
+    {
+      "id": "q_cr_concept_1",
+      "concept_id": "chain_rule",
+      "question_type": "conceptual",
+      "difficulty": "Medium",
+      "question_text": "Why is the Chain Rule expressed as a product of derivatives rather than a sum of derivatives?",
+      "options": {
+        "A": "Because the sum of derivatives would always equal 1.0",
+        "B": "Because summation is not defined for differential equations in calculus",
+        "C": "Because derivatives always represent vectors that can only be multiplied",
+        "D": "Because a change in x causes a proportional change in u, which in turn causes a proportional change in y; composite rates of change scale multiplicatively"
+      },
+      "correct_option": "D",
+      "explanation": "If u changes at rate r1 with respect to x, and y changes at rate r2 with respect to u, then a delta-x causes delta-u = r1 * delta-x, which causes delta-y = r2 * delta-u = (r1 * r2) * delta-x.",
+      "misconception_id": "MISC_CHAIN_RULE_SUM",
+      "prerequisite_id": "derivatives"
+    },
+    {
+      "id": "q_deriv_basic_1",
+      "concept_id": "derivatives",
+      "question_type": "basic",
+      "difficulty": "Easy",
+      "question_text": "What is the derivative of the quadratic loss term f(w) = 0.5 * (w - 3)^2 with respect to w?",
+      "options": {
+        "A": "w - 3",
+        "B": "0.5 * (w - 3)",
+        "C": "w^2 - 6w + 9",
+        "D": "3"
+      },
+      "correct_option": "A",
+      "explanation": "By the power rule and chain rule: d/dw [0.5 * (w - 3)^2] = 0.5 * 2 * (w - 3) * 1 = w - 3.",
+      "misconception_id": null,
+      "prerequisite_id": null
+    }
+  ]
+}
