@@ -1,0 +1,68 @@
+{
+  "accuracy": 1.0,
+  "precision_macro": 1.0,
+  "precision_weighted": 1.0,
+  "recall_macro": 1.0,
+  "recall_weighted": 1.0,
+  "f1_macro": 1.0,
+  "f1_weighted": 1.0,
+  "risk_mae": 0.0584,
+  "confusion_matrix": [
+    [
+      500,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      500,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      500,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      500
+    ]
+  ],
+  "class_names": [
+    "Genuine Mastery",
+    "False Mastery",
+    "Conceptual Misconception",
+    "Knowledge Gap"
+  ],
+  "per_class": {
+    "Genuine Mastery": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "support": 500
+    },
+    "False Mastery": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "support": 500
+    },
+    "Conceptual Misconception": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "support": 500
+    },
+    "Knowledge Gap": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1_score": 1.0,
+      "support": 500
+    }
+  }
+}

@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  deeplearnx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deeplearnx-app
+    restart: unless-stopped
+    ports:
+      - "8055:8055"
+    environment:
+      - PORT=8055
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_DEFAULT_MODEL=gemini-2.5-flash
+    volumes:
+      # Persist SQLite database across container upgrades
+      - ./database:/app/database
+      # Persist PyTorch neural model checkpoint and evaluation figures
+      - ./model:/app/model
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8055/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

@@ -1,0 +1,526 @@
+[
+  {
+    "index": 1,
+    "topic": "Fluid Mechanics",
+    "domain_id": "custom_fluid_mechanics_9f67dd",
+    "category": "Engineering / Physics",
+    "latency_ms": 10.1,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "A": 3,
+      "C": 2,
+      "D": 4,
+      "B": 3
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Hydrostatic Pressure & Archimedes' Buoyancy Principle",
+    "sample_basic": "What determines the hydrostatic water pressure acting on a submerged scuba diver?",
+    "sample_conceptual": "A large steel cargo ship floats easily in seawater, but a solid steel coin immediately sinks. Why does the ship float?",
+    "sample_application": "A submarine is floating at the surface of the ocean. To submerge safely to a depth of 50 meters, what must the crew do?"
+  },
+  {
+    "index": 2,
+    "topic": "Ancient Egyptian Architecture",
+    "domain_id": "custom_ancient_egyptian_architectur_b7006e",
+    "category": "History / Archaeology",
+    "latency_ms": 8.0,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "C": 6,
+      "B": 1,
+      "D": 3,
+      "A": 2
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Ancient Egyptian Architecture: Critical Turning Points & Ideological Conflicts",
+    "sample_basic": "In Ancient Egyptian Architecture, what primary factor drove the historical development of Historical Context & Primary Causes?",
+    "sample_conceptual": "In Ancient Egyptian Architecture, why do historians analyze multiple conflicting primary sources when studying Historical Context & Primary Causes?",
+    "sample_application": "In Ancient Egyptian Architecture, a researcher examining a decisive conflict in Historical Context & Primary Causes finds official reports claiming victory, but letters from frontline participants describe retreat and heavy casualties. How should the researcher proceed?"
+  },
+  {
+    "index": 3,
+    "topic": "Cybersecurity & Network Defense",
+    "domain_id": "custom_cybersecurity_network_defens_ee0b37",
+    "category": "Computer Science",
+    "latency_ms": 7.6,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 5,
+      "application": 3
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 5,
+      "hard": 3
+    },
+    "correct_option_distribution": {
+      "A": 4,
+      "B": 4,
+      "D": 1,
+      "C": 3
+    },
+    "probes_count": 3,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Transport Layer Protocols: TCP vs. UDP Dynamics",
+    "sample_basic": "What fundamental networking process occurs when a sender's protocol stack wraps higher-layer data with new header control information?",
+    "sample_conceptual": "At which layer of the OSI model does an Ethernet switch operate when making frame forwarding decisions?",
+    "sample_application": "A network client initiates a TCP connection to a remote web server. What sequence of packets constitutes the standard connection handshake?"
+  },
+  {
+    "index": 4,
+    "topic": "Cognitive Psychology & Memory",
+    "domain_id": "custom_cognitive_psychology_memory_1febd0",
+    "category": "Social Sciences",
+    "latency_ms": 7.4,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "A": 2,
+      "B": 5,
+      "D": 3,
+      "C": 2
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Cognitive Psychology & Memory: Environmental Adaptation & Homeostatic Balance",
+    "sample_basic": "In Cognitive Psychology & Memory, how do cells and organisms coordinate vital functions in Biological Structures & Cell Functions?",
+    "sample_conceptual": "In Cognitive Psychology & Memory, why are negative feedback mechanisms essential when studying Biological Structures & Cell Functions?",
+    "sample_application": "In Cognitive Psychology & Memory, when a person exercises in extreme heat, their body sweats and peripheral blood vessels dilate in Biological Structures & Cell Functions. What is the primary purpose of this response?"
+  },
+  {
+    "index": 5,
+    "topic": "Microeconomics & Market Structures",
+    "domain_id": "custom_microeconomics_market_struct_6cd872",
+    "category": "Economics / Business",
+    "latency_ms": 7.9,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "D": 4,
+      "C": 2,
+      "A": 3,
+      "B": 3
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Microeconomics & Market Structures: Scarcity, Supply & Consumer Demand",
+    "sample_basic": "In Microeconomics & Market Structures, what core economic reality drives decision-making in Scarcity, Supply & Consumer Demand?",
+    "sample_conceptual": "In Microeconomics & Market Structures, how does a shift in consumer demand affect market equilibrium in Scarcity, Supply & Consumer Demand?",
+    "sample_application": "In Microeconomics & Market Structures, a city enacts a strict rent control ceiling well below the market equilibrium price in Scarcity, Supply & Consumer Demand. What is the predictable economic consequence?"
+  },
+  {
+    "index": 6,
+    "topic": "Organic Chemistry & Reaction Mechanisms",
+    "domain_id": "custom_organic_chemistry_reaction_m_83eb46",
+    "category": "Chemistry",
+    "latency_ms": 7.7,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "D": 5,
+      "B": 2,
+      "A": 4,
+      "C": 1
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Organic Chemistry & Reaction Mechanisms: Molecular Structure & Chemical Bonding",
+    "sample_basic": "In Organic Chemistry & Reaction Mechanisms, what drives atoms and molecules to interact in Molecular Structure & Chemical Bonding?",
+    "sample_conceptual": "In Organic Chemistry & Reaction Mechanisms, when examining Molecular Structure & Chemical Bonding, how does increasing temperature affect the rate of reaction?",
+    "sample_application": "In Organic Chemistry & Reaction Mechanisms, a lab experiment in Molecular Structure & Chemical Bonding requires increasing the rate of reaction between solid calcium carbonate and acid. Which change is most effective?"
+  },
+  {
+    "index": 7,
+    "topic": "Cellular Genetics & CRISPR Gene Editing",
+    "domain_id": "custom_cellular_genetics_crispr_gen_1e03af",
+    "category": "Biotechnology / Life Sciences",
+    "latency_ms": 6.5,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "C": 5,
+      "B": 6,
+      "A": 1
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Cellular Genetics & CRISPR Gene Editing: Environmental Adaptation & Homeostatic Balance",
+    "sample_basic": "In Cellular Genetics & CRISPR Gene Editing, how do cells and organisms coordinate vital functions in Biological Structures & Cell Functions?",
+    "sample_conceptual": "In Cellular Genetics & CRISPR Gene Editing, why are negative feedback mechanisms essential when studying Biological Structures & Cell Functions?",
+    "sample_application": "In Cellular Genetics & CRISPR Gene Editing, when a person exercises in extreme heat, their body sweats and peripheral blood vessels dilate in Biological Structures & Cell Functions. What is the primary purpose of this response?"
+  },
+  {
+    "index": 8,
+    "topic": "Renewable Energy & Solar Photovoltaics",
+    "domain_id": "custom_renewable_energy_solar_photo_bc2619",
+    "category": "Environmental Engineering",
+    "latency_ms": 6.8,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "B": 4,
+      "D": 4,
+      "C": 1,
+      "A": 3
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Renewable Energy & Solar Photovoltaics: Equations of Motion & Force Interactions",
+    "sample_basic": "In Renewable Energy & Solar Photovoltaics, which core physical principle governs how Fundamental Laws & Physical Quantities operates?",
+    "sample_conceptual": "In Renewable Energy & Solar Photovoltaics, when analyzing Fundamental Laws & Physical Quantities, how does the principle of energy conservation predict system behavior?",
+    "sample_application": "In Renewable Energy & Solar Photovoltaics, two spheres of identical size but different masses (1 kg and 10 kg) are dropped from the same height in a vacuum chamber. What happens in Fundamental Laws & Physical Quantities?"
+  },
+  {
+    "index": 9,
+    "topic": "Music Theory & Harmony",
+    "domain_id": "custom_music_theory_harmony_e3d41f",
+    "category": "Creative Arts & Humanities",
+    "latency_ms": 8.2,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "D": 5,
+      "C": 4,
+      "A": 2,
+      "B": 1
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Music Theory & Harmony: Foundational Elements & Tonal Scales",
+    "sample_basic": "In Music Theory & Harmony, what is the foundational purpose of Foundational Elements & Tonal Scales?",
+    "sample_conceptual": "In Music Theory & Harmony, how does resolving harmonic dissonance into consonance create musical movement in Foundational Elements & Tonal Scales?",
+    "sample_application": "In Music Theory & Harmony, a composer wants to create a strong, satisfying authentic cadence from a dominant chord (V) back to tonic (I) in Foundational Elements & Tonal Scales. Which voice-leading technique achieves this?"
+  },
+  {
+    "index": 10,
+    "topic": "Aviation & Flight Dynamics",
+    "domain_id": "custom_aviation_flight_dynamics_bccbf2",
+    "category": "Aerospace Engineering",
+    "latency_ms": 7.3,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "C": 4,
+      "B": 2,
+      "A": 3,
+      "D": 3
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Aviation & Flight Dynamics: Fundamental Laws & Physical Quantities",
+    "sample_basic": "In Aviation & Flight Dynamics, which core physical principle governs how Fundamental Laws & Physical Quantities operates?",
+    "sample_conceptual": "In Aviation & Flight Dynamics, when analyzing Fundamental Laws & Physical Quantities, how does the principle of energy conservation predict system behavior?",
+    "sample_application": "In Aviation & Flight Dynamics, two spheres of identical size but different masses (1 kg and 10 kg) are dropped from the same height in a vacuum chamber. What happens in Fundamental Laws & Physical Quantities?"
+  },
+  {
+    "index": 11,
+    "topic": "Constitutional Law & Civil Liberties",
+    "domain_id": "custom_constitutional_law_civil_lib_6ad8b4",
+    "category": "Law & Governance",
+    "latency_ms": 7.1,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "C": 2,
+      "B": 6,
+      "A": 2,
+      "D": 2
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "Conceptual Misconception",
+    "graph_nodes_count": 0,
+    "primary_gap": "Constitutional Law & Civil Liberties: Statutory Interpretation & Legal Standards",
+    "sample_basic": "In Constitutional Law & Civil Liberties, what is the foundation for establishing legal rights and rules in Legal Foundations & Statutory Authority?",
+    "sample_conceptual": "In Constitutional Law & Civil Liberties, why is the doctrine of legal precedent (stare decisis) fundamental in Legal Foundations & Statutory Authority?",
+    "sample_application": "In Constitutional Law & Civil Liberties, when a government statute restricts peaceful public protests in Legal Foundations & Statutory Authority, which standard of review do constitutional courts apply?"
+  },
+  {
+    "index": 12,
+    "topic": "Data Structures & Algorithms",
+    "domain_id": "custom_data_structures_algorithms_9147c9",
+    "category": "Software Engineering",
+    "latency_ms": 8.6,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "C": 4,
+      "B": 2,
+      "D": 2,
+      "A": 4
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Data Structures & Algorithms: Core Architecture & System Foundations",
+    "sample_basic": "In Data Structures & Algorithms, why is algorithmic complexity and efficiency important in Core Architecture & System Foundations?",
+    "sample_conceptual": "In Data Structures & Algorithms, why is algorithmic complexity analysis crucial in Core Architecture & System Foundations?",
+    "sample_application": "In Data Structures & Algorithms, an engineering team observes that a search feature in Core Architecture & System Foundations takes 2 milliseconds for 100 items but 20 seconds for 10,000 items ($O(n^2)$ growth). What is the best remedy?"
+  },
+  {
+    "index": 13,
+    "topic": "Marine Biology & Coral Reefs",
+    "domain_id": "custom_marine_biology_coral_reefs_4a718c",
+    "category": "Oceanography & Ecology",
+    "latency_ms": 6.7,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "D": 2,
+      "A": 3,
+      "B": 3,
+      "C": 4
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Marine Biology & Coral Reefs: Metabolic Pathways & Physiological Mechanisms",
+    "sample_basic": "In Marine Biology & Coral Reefs, how do cells and organisms coordinate vital functions in Biological Structures & Cell Functions?",
+    "sample_conceptual": "In Marine Biology & Coral Reefs, why are negative feedback mechanisms essential when studying Biological Structures & Cell Functions?",
+    "sample_application": "In Marine Biology & Coral Reefs, when a person exercises in extreme heat, their body sweats and peripheral blood vessels dilate in Biological Structures & Cell Functions. What is the primary purpose of this response?"
+  },
+  {
+    "index": 14,
+    "topic": "Astrophysics & Stellar Evolution",
+    "domain_id": "custom_astrophysics_stellar_evoluti_4e1235",
+    "category": "Space Science",
+    "latency_ms": 7.9,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "D": 5,
+      "A": 2,
+      "C": 2,
+      "B": 3
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Astrophysics & Stellar Evolution: Fundamental Laws & Physical Quantities",
+    "sample_basic": "In Astrophysics & Stellar Evolution, which core physical principle governs how Fundamental Laws & Physical Quantities operates?",
+    "sample_conceptual": "In Astrophysics & Stellar Evolution, when analyzing Fundamental Laws & Physical Quantities, how does the principle of energy conservation predict system behavior?",
+    "sample_application": "In Astrophysics & Stellar Evolution, two spheres of identical size but different masses (1 kg and 10 kg) are dropped from the same height in a vacuum chamber. What happens in Fundamental Laws & Physical Quantities?"
+  },
+  {
+    "index": 15,
+    "topic": "Cognitive Neuroscience of Sleep",
+    "domain_id": "custom_cognitive_neuroscience_of_sl_0be1dd",
+    "category": "Medicine & Health Sciences",
+    "latency_ms": 7.0,
+    "concepts_count": 4,
+    "misconceptions_count": 4,
+    "questions_count": 12,
+    "question_types": {
+      "basic": 4,
+      "conceptual": 4,
+      "application": 4
+    },
+    "difficulties": {
+      "easy": 4,
+      "medium": 4,
+      "hard": 4
+    },
+    "correct_option_distribution": {
+      "A": 5,
+      "B": 3,
+      "C": 3,
+      "D": 1
+    },
+    "probes_count": 4,
+    "jargon_hits_count": 0,
+    "jargon_hits": [],
+    "dl_predicted_state": "False Mastery",
+    "graph_nodes_count": 0,
+    "primary_gap": "Cognitive Neuroscience Of Sleep: Metabolic Pathways & Physiological Mechanisms",
+    "sample_basic": "In Cognitive Neuroscience Of Sleep, how do cells and organisms coordinate vital functions in Biological Structures & Cell Functions?",
+    "sample_conceptual": "In Cognitive Neuroscience Of Sleep, why are negative feedback mechanisms essential when studying Biological Structures & Cell Functions?",
+    "sample_application": "In Cognitive Neuroscience Of Sleep, when a person exercises in extreme heat, their body sweats and peripheral blood vessels dilate in Biological Structures & Cell Functions. What is the primary purpose of this response?"
+  }
+]
