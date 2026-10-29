@@ -4,6 +4,7 @@ Project: DeepLearnX - Cognitive Diagnostic & Knowledge Gap Detection Platform
 """
 
 import os
+from pathlib import Path
 import json
 import docx
 from docx.shared import Inches, Pt, RGBColor
@@ -673,7 +674,7 @@ def build_report():
     )
     
     # Save document
-    output_path = "documentation/DeepLearnX_Comprehensive_Project_Report.docx"
+    output_path = Path(__file__).resolve().parent / "DeepLearnX_Comprehensive_Project_Report.docx"
     doc.save(output_path)
     print(f"Report successfully saved to {output_path}!")
 

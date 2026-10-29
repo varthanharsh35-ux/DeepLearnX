@@ -743,13 +743,15 @@ def submit_assessment(sub: AssessmentSubmission):
         }
         
         misc_info = None
+        detected_misc_ids = {m["id"] for m in dl_result.get("detected_misconceptions", []) if isinstance(m, dict)}
         if not is_corr and q_row["misconception_id"] and q_row["misc_name"]:
-            misc_info = {
-                "id": q_row["misconception_id"],
-                "name": q_row["misc_name"],
-                "description": q_row["misc_desc"],
-                "remediation": q_row["misc_remediation"]
-            }
+            if (q_row["misconception_id"] in detected_misc_ids) or q_row["question_type"] in ["conceptual", "application"]:
+                misc_info = {
+                    "id": q_row["misconception_id"],
+                    "name": q_row["misc_name"],
+                    "description": q_row["misc_desc"],
+                    "remediation": q_row["misc_remediation"]
+                }
             
         probe_info = None
         if q_row["reasoning_probe"]:

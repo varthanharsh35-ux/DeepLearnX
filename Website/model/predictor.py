@@ -129,7 +129,10 @@ class DeepLearnXPredictor:
         heuristic_bias_count = 0
         rapid_guessing_count = 0
         two_tier_inconsistency_count = 0
+        two_tier_passed_count = 0
         two_tier_total_count = 0
+        concept_error_counts = {}
+        candidate_misconceptions = []
         
         for r in responses:
             q_id = r.get("question_id")
@@ -141,6 +144,9 @@ class DeepLearnXPredictor:
             selected = r.get("selected_option")
             correct = q_info.get("correct_option")
             is_correct = 1 if (selected == correct) else 0
+            
+            if not is_correct:
+                concept_error_counts[c_id] = concept_error_counts.get(c_id, 0) + 1
             
             # Check option lengths for Length Cue Heuristic Gaming detection
             opts_dict = {}
@@ -166,6 +172,7 @@ class DeepLearnXPredictor:
             # Check Two-Tier Reasoning Probe consistency
             reasoning_selected = r.get("reasoning_selected")
             rp = q_info.get("reasoning_probe")
+            probe_passed = False
             if rp:
                 if isinstance(rp, str):
                     try:
@@ -174,17 +181,28 @@ class DeepLearnXPredictor:
                         rp = None
                 if rp and isinstance(rp, dict):
                     two_tier_total_count += 1
-                    correct_probe = rp.get("correct_probe", "A")
-                    if is_correct and reasoning_selected and reasoning_selected != correct_probe:
-                        two_tier_inconsistency_count += 1
+                    correct_probe = str(rp.get("correct_probe", "A")).strip().upper()
+                    if reasoning_selected and str(reasoning_selected).strip().upper() == correct_probe:
+                        two_tier_passed_count += 1
+                        probe_passed = True
+                    else:
+                        if is_correct:
+                            # Correct on main question but failed reasoning probe -> false mastery / surface guess
+                            two_tier_inconsistency_count += 1
 
             # Check if selected distractor corresponds to misconception
             misc_id = q_info.get("misconception_id")
             selected_misc_idx = 0
             if not is_correct and misc_id:
                 m_info = get_misconception_info(misc_id)
-                if m_info and m_info not in detected_misconceptions:
-                    detected_misconceptions.append(m_info)
+                if m_info:
+                    # Stash candidate misconception; only confirm if supported by conceptual/application error or repeated misses
+                    candidate_misconceptions.append({
+                        "m_info": m_info,
+                        "concept_id": c_id,
+                        "q_type": q_type,
+                        "probe_failed": (not probe_passed) if rp else False
+                    })
                 selected_misc_idx = 1 # flags non-zero misconception embedding
                         
             conf = int(r.get("confidence", 3))
@@ -210,6 +228,19 @@ class DeepLearnXPredictor:
                 "selected_misc_idx": selected_misc_idx
             })
             
+        # Confirm misconceptions: require evidence from conceptual/application traps, failed probes, or repeated misses (2+)
+        for cand in candidate_misconceptions:
+            m = cand["m_info"]
+            cid = cand["concept_id"]
+            q_t = cand["q_type"]
+            probe_fail = cand["probe_failed"]
+            err_count = concept_error_counts.get(cid, 0)
+            
+            # An isolated error on a basic recall question without repeated misses is a simple knowledge gap, NOT a cognitive misconception
+            if q_t in ["conceptual", "application"] or probe_fail or err_count >= 2:
+                if m not in detected_misconceptions:
+                    detected_misconceptions.append(m)
+
         total_q = len(seq_items)
         acc_basic = (basic_correct / basic_total) if basic_total > 0 else 0.0
         acc_conc = (conc_correct / conc_total) if conc_total > 0 else 0.0
@@ -352,6 +383,7 @@ class DeepLearnXPredictor:
             "rapid_guessing_pct": round(rgb * 100, 1),
             "gaming_detected": is_gaming_detected,
             "two_tier_probes_tested": two_tier_total_count,
+            "two_tier_probes_passed": two_tier_passed_count,
             "two_tier_inconsistencies": two_tier_inconsistency_count,
             "diagnosis": (
                 gaming_reason if gaming_reason

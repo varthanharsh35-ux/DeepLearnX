@@ -421,7 +421,7 @@ function displayAssessmentResults(res) {
       <div><strong>Problem Solving:</strong> ${fm.application_accuracy}%</div>
       <div><strong>Picked Longest Option:</strong> <span class="${(fm.heuristic_bias_index || 0) >= 60 ? "text-red" : "text-emerald"}">${fm.heuristic_bias_index || 0}%</span></div>
       <div><strong>Fast Guesses (<3.5s):</strong> <span class="${(fm.rapid_guessing_pct || 0) >= 40 ? "text-amber" : "text-dim"}">${fm.rapid_guessing_pct || 0}%</span></div>
-      ${fm.two_tier_probes_tested ? `<div><strong>Reasoning Checks Passed:</strong> <span class="${(fm.two_tier_inconsistencies || 0) > 0 ? "text-amber" : "text-emerald"}">${fm.two_tier_probes_tested - (fm.two_tier_inconsistencies || 0)}/${fm.two_tier_probes_tested} verified</span></div>` : ""}
+      ${fm.two_tier_probes_tested ? `<div><strong>Reasoning Checks Passed:</strong> <span class="${(fm.two_tier_probes_passed !== undefined ? fm.two_tier_probes_passed < fm.two_tier_probes_tested : (fm.two_tier_inconsistencies || 0) > 0) ? "text-amber" : "text-emerald"}">${fm.two_tier_probes_passed !== undefined ? fm.two_tier_probes_passed : (fm.two_tier_probes_tested - (fm.two_tier_inconsistencies || 0))}/${fm.two_tier_probes_tested} verified</span></div>` : ""}
     </div>
   `;
 
