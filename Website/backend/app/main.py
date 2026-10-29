@@ -106,6 +106,7 @@ class CustomGenerateRequest(BaseModel):
     api_key: Optional[str] = None
     api_provider: Optional[str] = "gemini"
     model_name: Optional[str] = None
+    require_live_llm: Optional[bool] = False
 
 # ----------------- AUTH ENDPOINTS -----------------
 
@@ -548,6 +549,12 @@ def get_assessment_questions(
         })
     return questions
 
+@app.get("/api/assessment/provider-status")
+def get_provider_status():
+    """Endpoint for UI and testing to inspect configured LLM providers and active generation mode."""
+    from backend.app.syllabus_generator import check_provider_status
+    return check_provider_status()
+
 @app.post("/api/assessment/custom-generate")
 def custom_generate_assessment(req: CustomGenerateRequest):
     """
@@ -569,9 +576,14 @@ def custom_generate_assessment(req: CustomGenerateRequest):
             num_questions=req.num_questions,
             api_key=req.api_key,
             api_provider=req.api_provider,
-            model_name=req.model_name
+            model_name=req.model_name,
+            require_live_llm=bool(req.require_live_llm)
         )
         return result
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except RuntimeError as re_err:
+        raise HTTPException(status_code=502, detail=str(re_err))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate custom assessment: {str(e)}")
 

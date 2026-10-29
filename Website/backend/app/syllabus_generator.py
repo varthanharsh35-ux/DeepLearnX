@@ -279,11 +279,12 @@ def clean_and_parse_llm_json(raw_text: str) -> Optional[Dict[str, Any]]:
 
 def generate_via_gemini_api(topic_title: str, syllabus_text: str, api_key: str, model_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Calls Google Gemini REST API to generate structured cognitive assessment with model fallbacks and backoff."""
-    # Standard official Google Gemini API model identifiers for v1beta
+    # Official Google Gemini API model identifiers for v1beta
     default_candidates = [
-        "gemini-3.5-flash-lite",
-        "gemini-3.8-flash",
-        "gemini-3.6-flash",
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "gemini-2.0-flash-lite",
         "gemini-flash-latest"
     ]
     if model_name:
@@ -310,7 +311,8 @@ def generate_via_gemini_api(topic_title: str, syllabus_text: str, api_key: str, 
         }
     }
     
-    with httpx.Client(timeout=22.0) as client:
+    last_error = None
+    with httpx.Client(timeout=30.0) as client:
         for m in candidate_models:
             if not m:
                 continue
@@ -325,11 +327,13 @@ def generate_via_gemini_api(topic_title: str, syllabus_text: str, api_key: str, 
                         parsed = clean_and_parse_llm_json(raw_text)
                         if parsed and "concepts" in parsed and "questions" in parsed:
                             print(f"[Gemini API] Successfully generated assessment using {m}!")
+                            parsed["_model_used"] = m
                             return parsed
                         else:
                             print(f"[Gemini API Attempt] Model {m} returned JSON missing concepts/questions")
                 elif response.status_code in (429, 503):
-                    print(f"[Gemini API Attempt] Model {m} returned HTTP {response.status_code}. Trying next model...")
+                    print(f"[Gemini API Attempt] Model {m} returned HTTP {response.status_code}. Trying next candidate...")
+                    last_error = f"HTTP {response.status_code}: Model overloaded or rate limit reached"
                     continue
                 else:
                     err_text = ""
@@ -338,11 +342,18 @@ def generate_via_gemini_api(topic_title: str, syllabus_text: str, api_key: str, 
                         err_text = err_json.get("error", {}).get("message", response.text[:200])
                     except Exception:
                         err_text = response.text[:200]
-                    print(f"[Gemini API Error] Model {m} returned HTTP {response.status_code}: {err_text}")
+                    last_error = f"HTTP {response.status_code}: {err_text}"
+                    print(f"[Gemini API Error] Model {m}: {last_error}")
+                    # If invalid key (400/403), stop immediately instead of retrying across all candidates
+                    if response.status_code in (400, 403):
+                        break
             except Exception as e:
+                last_error = str(e)
                 print(f"[Gemini API Exception] Model {m}: {e}")
                 continue
                 
+    if last_error:
+        raise RuntimeError(f"Gemini API generation failed: {last_error}")
     return None
 
 def generate_via_openai_api(topic_title: str, syllabus_text: str, api_key: str, model_name: str = "gpt-4o-mini") -> Optional[Dict[str, Any]]:
@@ -369,15 +380,76 @@ def generate_via_openai_api(topic_title: str, syllabus_text: str, api_key: str, 
         try:
             response = client.post(url, json=payload, headers=headers)
             if response.status_code != 200:
-                print(f"[OpenAI API Error] Status {response.status_code}: {response.text}")
-                return None
+                err_text = response.text[:200]
+                try:
+                    err_json = response.json()
+                    err_text = err_json.get("error", {}).get("message", err_text)
+                except Exception:
+                    pass
+                raise RuntimeError(f"OpenAI API HTTP {response.status_code}: {err_text}")
             
             data = response.json()
             content = data["choices"][0]["message"]["content"]
-            return clean_and_parse_llm_json(content)
+            parsed = clean_and_parse_llm_json(content)
+            if parsed:
+                parsed["_model_used"] = model_name
+            return parsed
         except Exception as e:
-            print(f"[OpenAI Exception]: {e}")
-            return None
+            raise RuntimeError(f"OpenAI API call failed: {e}")
+
+def check_provider_status() -> Dict[str, Any]:
+    """Reports live provider status, configuration, reachability, and active generation mode."""
+    gemini_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
+    openai_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    
+    def mask_key(k: str) -> str:
+        if not k:
+            return "Not Configured"
+        if len(k) <= 8:
+            return "***"
+        return f"{k[:6]}...{k[-4:]}"
+        
+    gemini_reachable = False
+    openai_reachable = False
+    try:
+        with httpx.Client(timeout=3.0) as client:
+            resp = client.get("https://generativelanguage.googleapis.com")
+            gemini_reachable = resp.status_code in (200, 400, 404)
+    except Exception:
+        gemini_reachable = False
+        
+    try:
+        with httpx.Client(timeout=3.0) as client:
+            resp = client.get("https://api.openai.com/v1/models")
+            openai_reachable = resp.status_code in (200, 401)
+    except Exception:
+        openai_reachable = False
+        
+    active_mode = "live_llm" if (gemini_key or openai_key) else "offline_knowledge_synthesis"
+    
+    return {
+        "status": "ready" if active_mode == "live_llm" else "offline_ready",
+        "active_mode": active_mode,
+        "providers": {
+            "gemini": {
+                "configured": bool(gemini_key),
+                "key_masked": mask_key(gemini_key),
+                "network_reachable": gemini_reachable,
+                "supported_models": ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"]
+            },
+            "openai": {
+                "configured": bool(openai_key),
+                "key_masked": mask_key(openai_key),
+                "network_reachable": openai_reachable,
+                "supported_models": ["gpt-4o-mini", "gpt-4o"]
+            }
+        },
+        "notice": (
+            "Live cloud LLM generation is active."
+            if active_mode == "live_llm"
+            else "No API key detected in environment (.env). Custom topics will generate via authentic offline factual knowledge synthesis. Enter a Gemini or OpenAI API key in the UI or Website/.env to activate live LLM generation."
+        )
+    }
 
 # =============================================================================
 # 2. DOMAIN-AWARE OFFLINE CURRICULA (HISTORICAL, SCIENTIFIC, ECONOMIC)
@@ -1513,7 +1585,8 @@ class SyllabusGeneratorEngine:
         num_questions: int = 12,
         api_key: Optional[str] = None,
         api_provider: Optional[str] = "gemini",
-        model_name: Optional[str] = None
+        model_name: Optional[str] = None,
+        require_live_llm: bool = False
     ) -> Dict[str, Any]:
         """
         Generates full domain assessment:
@@ -1532,12 +1605,16 @@ class SyllabusGeneratorEngine:
         domain_id = f"custom_{clean_slug}_{random_suffix}"
 
         # 1. Check for AI API key (from parameter or environment)
+        explicit_key_provided = bool(api_key and api_key.strip())
         resolved_key = (api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip()
         provider = (api_provider or "gemini").lower()
         
         parsed_llm_data = None
+        llm_used = False
+        model_used = None
+        provider_error = None
+
         if resolved_key:
-            # Validate format: Google Gemini keys start with 'AIzaSy'; OpenAI with 'sk-'
             valid_format = False
             if provider == "openai" and (resolved_key.startswith("sk-") or "openai" in resolved_key.lower()):
                 valid_format = True
@@ -1545,7 +1622,10 @@ class SyllabusGeneratorEngine:
                 valid_format = True
             
             if not valid_format:
-                print(f"[AI Key Warning] Key for {provider} does not match official prefix ('AIzaSy...' for Gemini). Falling forward to authentic domain synthesis.")
+                warning_msg = f"Key for {provider} does not match official format prefix ('AIzaSy...' for Gemini, 'sk-...' for OpenAI)."
+                print(f"[AI Key Warning] {warning_msg}")
+                if require_live_llm or explicit_key_provided:
+                    raise ValueError(warning_msg)
             else:
                 print(f"[AI Generator] Calling {provider} API for topic '{topic_title}'...")
                 try:
@@ -1555,8 +1635,14 @@ class SyllabusGeneratorEngine:
                     else:
                         m = model_name or "gemini-1.5-flash"
                         parsed_llm_data = generate_via_gemini_api(topic_title, syllabus_text, resolved_key, m)
+                    if parsed_llm_data:
+                        llm_used = True
+                        model_used = parsed_llm_data.get("_model_used", m)
                 except Exception as e:
-                    print(f"[AI Generator Exception] {e}. Falling back to domain taxonomy.")
+                    provider_error = str(e)
+                    print(f"[AI Generator Failure] {provider_error}")
+                    if require_live_llm or explicit_key_provided:
+                        raise RuntimeError(f"Live LLM generation failed ({provider}): {provider_error}")
 
         # 2. Check curated domain taxonomy if LLM not used or failed
         if not parsed_llm_data:
@@ -1577,21 +1663,36 @@ class SyllabusGeneratorEngine:
                     print("[Taxonomy Match] Fuzzy match for Full Stack Web Development.")
                     parsed_llm_data = FULL_STACK_CURRICULUM
 
-
         # 3. Assemble domain from parsed data or generalized domain-aware builder
         if parsed_llm_data and "concepts" in parsed_llm_data and "questions" in parsed_llm_data:
-            return self._build_from_structured_spec(
+            res = self._build_from_structured_spec(
                 domain_id=domain_id,
                 topic_title=topic_title,
                 spec=parsed_llm_data
             )
+            res["generation_source"] = "live_llm" if llm_used else "curated_preloaded_course_catalog"
+            res["llm_used"] = llm_used
+            res["llm_provider"] = provider if llm_used else None
+            res["model_name"] = model_used
+            res["generation_notice"] = f"Generated live via {provider.upper()} ({model_used})." if llm_used else "Preloaded curated course catalog assessment."
+            return res
         else:
-            return self._build_domain_aware_fallback(
+            res = self._build_domain_aware_fallback(
                 domain_id=domain_id,
                 topic_title=topic_title,
                 syllabus_text=syllabus_text,
                 num_questions=num_questions
             )
+            res["generation_source"] = "offline_knowledge_synthesis"
+            res["llm_used"] = False
+            res["llm_provider"] = None
+            res["model_name"] = None
+            if provider_error:
+                res["llm_error"] = provider_error
+                res["generation_notice"] = f"API call failed ({provider_error}); generated via authentic offline domain knowledge synthesis."
+            else:
+                res["generation_notice"] = "Generated via authentic offline domain knowledge synthesis because no live LLM API key was provided or configured."
+            return res
 
     def _build_from_structured_spec(self, domain_id: str, topic_title: str, spec: Dict[str, Any]) -> Dict[str, Any]:
         """Converts structured spec (from LLM or curated taxonomy) into SQLite records."""

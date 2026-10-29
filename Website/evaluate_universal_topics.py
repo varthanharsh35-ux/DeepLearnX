@@ -1,3 +1,20 @@
+"""
+DeepLearnX Comprehensive Multi-Disciplinary Universal Quality Benchmark
+Evaluates production curriculum generation across 20 diverse academic topics:
+- 15 standard multidisciplinary evaluation topics
+- 5 completely unseen academic disciplines (Mendelian genetics, Photography, Supply & Demand, Japanese grammar, Database normalization)
+
+Audits:
+1. Honest Provider & Generation Source Reporting (never masquerades offline synthesis as live LLM)
+2. DAG prerequisite integrity (c1 -> c2 -> c3 -> c4)
+3. 12 tiered diagnostic questions (4 Basic, 4 Conceptual, 4 Application)
+4. Randomized Two-Tier Reasoning Probe placement
+5. Balanced option lengths (heuristic bias <= 40%)
+6. Zero cross-domain distractor contamination
+7. Zero sentence truncation / dangling prepositions
+8. Domain-isolated remedial question generation
+"""
+
 import sys
 import os
 import json
@@ -13,7 +30,7 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 sys.path.insert(0, str(BASE_DIR / "backend" / "app"))
 
-from backend.app.syllabus_generator import SyllabusGeneratorEngine
+from backend.app.syllabus_generator import SyllabusGeneratorEngine, check_provider_status
 from backend.app.main import get_remedial_questions, get_db_connection
 from backend.app.quiz_validator import (
     validate_curriculum_package,
@@ -22,38 +39,55 @@ from backend.app.quiz_validator import (
     DANGLING_ENDINGS
 )
 
-# 15 substantially unrelated academic topics specified by user requirements
-TEST_TOPICS = [
-    "Plants and their parts",
-    "Types of spiders",
-    "Fluid mechanics",
-    "The French Revolution",
-    "Quantum cryptography",
-    "Macroeconomics",
-    "AI ethics",
-    "Photosynthesis",
-    "Fractions and basic arithmetic",
-    "Python loops",
-    "English grammar",
-    "The water cycle",
-    "The human digestive system",
-    "Basic constitutional law",
-    "Music theory"
+# 20 Diverse Academic Topics: 15 baseline + 5 unseen academic fields
+BENCHMARK_TOPICS = [
+    # 15 Baseline Cross-Disciplinary Topics
+    ("Plants and their parts", "Botanical & Plant Sciences"),
+    ("Types of spiders", "Zoology & Arachnid Biology"),
+    ("Fluid mechanics", "Fluid Mechanics & Hydraulics"),
+    ("The French Revolution", "History & Humanities"),
+    ("Quantum cryptography", "Quantum Science & Cryptography"),
+    ("Macroeconomics", "Economics & Business"),
+    ("AI ethics", "Philosophy & Computer Science"),
+    ("Photosynthesis", "Botanical & Cellular Biology"),
+    ("Fractions and basic arithmetic", "Mathematics"),
+    ("Python loops", "Computer Science"),
+    ("English grammar", "Linguistics & Language Studies"),
+    ("The water cycle", "Earth & Environmental Sciences"),
+    ("The human digestive system", "Human Biology & Physiology"),
+    ("Basic constitutional law", "Legal Systems & Jurisprudence"),
+    ("Music theory", "Music Theory & Fine Arts"),
+    # 5 Unseen Academic Fields (Phase 3 Requirements)
+    ("Mendelian inheritance", "Genetics & Heredity"),
+    ("Basic photography aperture and shutter speed", "Photography & Visual Arts"),
+    ("Supply and demand", "Economics & Business"),
+    ("Japanese grammatical particles", "Linguistics & Language Studies"),
+    ("Introduction to database normalization", "Computer Science & Databases")
 ]
 
 engine = SyllabusGeneratorEngine()
 
-print("=" * 80)
-print("DEEPLEARNX COMPREHENSIVE 15-TOPIC MULTI-DISCIPLINARY QUALITY BENCHMARK")
-print("=" * 80)
+print("=" * 85)
+print("DEEPLEARNX COMPREHENSIVE 20-TOPIC MULTI-DISCIPLINARY QUALITY BENCHMARK")
+print("=" * 85)
+
+# Step 1: Check and display live provider status upfront
+provider_status = check_provider_status()
+print(f"Active Generation Mode: {provider_status['active_mode'].upper()}")
+print(f"Gemini Configured:      {provider_status['providers']['gemini']['configured']} (Masked Key: {provider_status['providers']['gemini']['key_masked']})")
+print(f"OpenAI Configured:      {provider_status['providers']['openai']['configured']} (Masked Key: {provider_status['providers']['openai']['key_masked']})")
+print(f"Notice:                 {provider_status['notice']}")
+print("-" * 85)
 
 passed_count = 0
 results = []
 
-for idx, topic in enumerate(TEST_TOPICS, 1):
-    print(f"\n[{idx}/15] Evaluating Topic: '{topic}'")
+for idx, (topic, expected_domain) in enumerate(BENCHMARK_TOPICS, 1):
+    is_unseen = idx > 15
+    tag = "[UNSEEN FIELD]" if is_unseen else "[BASELINE]"
+    print(f"\n[{idx}/20] {tag} Evaluating Topic: '{topic}'")
     try:
-        # Generate custom domain assessment
+        # Generate custom domain assessment using production entry point
         res = engine.generate_custom_domain(
             topic_title=topic,
             syllabus_text="",
@@ -61,6 +95,8 @@ for idx, topic in enumerate(TEST_TOPICS, 1):
         )
         domain_id = res["domain_id"]
         concepts = res["concepts"]
+        gen_source = res.get("generation_source", "unknown")
+        llm_used = res.get("llm_used", False)
         
         conn = get_db_connection()
         q_rows = conn.execute("""
@@ -94,7 +130,6 @@ for idx, topic in enumerate(TEST_TOPICS, 1):
                 probe_indices.append(q_idx + 1)
                 
         has_probes = (3 <= len(probe_indices) <= 5)
-        # Verify non-predictable placement
         is_randomized = (probe_indices != [3, 6, 9, 12])
         
         # 4. Strict Distractor Contamination Check (0% absurd distractors)
@@ -157,6 +192,7 @@ for idx, topic in enumerate(TEST_TOPICS, 1):
             passed_count += 1
 
         print(f"   ✓ Domain ID: {domain_id}")
+        print(f"   ✓ Generation Source: {gen_source} (LLM Used: {llm_used})")
         print(f"   ✓ Category: {res.get('category')} | Icon: {res.get('icon')}")
         print(f"   ✓ Concepts (4): {[c['name'].split(':')[-1].strip() for c in concepts]}")
         print(f"   ✓ Probes Count: {len(probe_indices)} (Placed on Qs: {probe_indices})")
@@ -171,8 +207,11 @@ for idx, topic in enumerate(TEST_TOPICS, 1):
 
         results.append({
             "topic": topic,
+            "unseen": is_unseen,
             "domain_id": domain_id,
             "category": res.get("category"),
+            "generation_source": gen_source,
+            "llm_used": llm_used,
             "probe_positions": probe_indices,
             "contaminated_count": len(contaminated_options),
             "truncated_count": len(truncated_options),
@@ -185,15 +224,16 @@ for idx, topic in enumerate(TEST_TOPICS, 1):
         traceback.print_exc()
         results.append({
             "topic": topic,
+            "unseen": is_unseen,
             "error": str(e),
             "passed": False
         })
 
-print("\n" + "=" * 80)
-print(f"EVALUATION SUMMARY: {passed_count}/{len(TEST_TOPICS)} TOPICS PASSED")
-print("=" * 80)
+print("\n" + "=" * 85)
+print(f"EVALUATION SUMMARY: {passed_count}/{len(BENCHMARK_TOPICS)} TOPICS PASSED")
+print("=" * 85)
 
-if passed_count == len(TEST_TOPICS):
-    print("ALL 15 DIVERSE MULTI-DISCIPLINARY TOPICS PASSED WITH ZERO ANOMALIES!")
+if passed_count == len(BENCHMARK_TOPICS):
+    print("ALL 20 MULTI-DISCIPLINARY AND UNSEEN TOPICS PASSED WITH ZERO ANOMALIES!")
 else:
-    print(f"WARNING: {len(TEST_TOPICS) - passed_count} topics had issues.")
+    print(f"WARNING: {len(BENCHMARK_TOPICS) - passed_count} topics had issues.")

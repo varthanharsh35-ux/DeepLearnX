@@ -236,3 +236,22 @@ def validate_curriculum_package(
             errors.append(f"Generic remediation filler detected in misconception: '{m.get('name')}'")
             
     return len(errors) == 0, errors
+
+def balance_sentence(text: str, target_min: int = 85, target_max: int = 108, fallback_context: str = "") -> str:
+    """Sanitize and balance extract sentences without destructive truncation or dangling prepositions."""
+    text = re.sub(r'\[\d+\]', '', text)
+    text = re.sub(r'\([^)]*\)', '', text)  # remove parenthetical clauses
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    # Check if text ends cleanly with punctuation
+    if not text.endswith(('.', '!', '?')):
+        text = f"{text}."
+        
+    # Check for dangling endings: never leave dangling prepositions or conjunctions
+    for pat in DANGLING_ENDINGS:
+        if re.search(pat, text, re.IGNORECASE):
+            text = re.sub(pat, '.', text).strip()
+            if fallback_context:
+                text = f"{text.rstrip('.')} {fallback_context.strip()}."
+
+    return text if text.endswith(('.', '!', '?')) else f"{text}."
