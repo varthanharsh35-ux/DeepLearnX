@@ -338,11 +338,15 @@ def get_concept_guide(concept_id: str, domain_id: str = None) -> dict:
         "key_takeaway": "Focus on understanding the core principle behind the formula before attempting practice questions."
     }
 
+import logging
+logger = logging.getLogger("deeplearnx.concept_guide")
+
 def generate_12_section_remedial_document(
     concept_id: str,
     domain_id: str = None,
     concept_data: dict = None,
-    student_error: dict = None
+    student_error: dict = None,
+    force_offline: bool = False
 ) -> dict:
     """
     Generates a comprehensive, pedagogical 12-section remedial learning document:
@@ -427,6 +431,99 @@ def generate_12_section_remedial_document(
             conn.close()
         except Exception:
             pass
+
+    # Check for live LLM provider availability
+    if not force_offline:
+        try:
+            try:
+                from providers.manager import get_provider_manager
+            except ImportError:
+                try:
+                    from app.providers.manager import get_provider_manager
+                except ImportError:
+                    from backend.app.providers.manager import get_provider_manager
+
+            mgr = get_provider_manager()
+            active_provider = mgr.get_active_provider()
+            if active_provider:
+                err_details = ""
+                if student_error and isinstance(student_error, dict):
+                    err_details = (
+                        f"Student Missed Question: {student_error.get('question_text', '')}\n"
+                        f"Student Selected (Flawed): {student_error.get('selected_text', student_error.get('selected_option', ''))}\n"
+                        f"Correct Principle: {student_error.get('correct_text', student_error.get('correct_option', ''))}\n"
+                    )
+
+                prompt = (
+                    f"Concept Name: {cname}\n"
+                    f"Academic Discipline: {domain_name}\n"
+                    f"Core Idea: {core_idea}\n"
+                    f"{err_details}\n"
+                    "Synthesize a highly targeted, pedagogical 12-section remedial learning guide addressing the student's exact misunderstanding. "
+                    "Respond with strictly valid JSON matching this schema:\n"
+                    "{\n"
+                    '  "sections": [\n'
+                    '    {"section_number": 1, "title": "Module Title & Learning Objective", "content": "..."},\n'
+                    '    {"section_number": 2, "title": "Prerequisite Foundations Check", "content": "..."},\n'
+                    '    {"section_number": 3, "title": "Plain-Language Introduction & Intuitive Analogy", "content": "..."},\n'
+                    '    {"section_number": 4, "title": "Deep-Dive Core Mechanics & Working Principles", "content": "..."},\n'
+                    '    {"section_number": 5, "title": "Essential Terminology & Technical Definitions", "content": "..."},\n'
+                    '    {"section_number": 6, "title": "Real-World Practical Examples & Case Studies", "content": "..."},\n'
+                    '    {"section_number": 7, "title": "Step-by-Step Procedure / Diagnostic Framework", "content": "..."},\n'
+                    '    {"section_number": 8, "title": "Common Misconceptions & Cognitive Traps", "content": "..."},\n'
+                    '    {"section_number": 9, "title": "Contrasting Scenarios (Correct vs Flawed Application)", "content": "..."},\n'
+                    '    {"section_number": 10, "title": "Practical Decision Rules of Thumb & Heuristics", "content": "..."},\n'
+                    '    {"section_number": 11, "title": "Key Takeaways & Executive Summary", "content": "..."},\n'
+                    '    {"section_number": 12, "title": "Knowledge Verification Check", "content": "..."}\n'
+                    '  ],\n'
+                    '  "practice_questions": [\n'
+                    '    {\n'
+                    '      "id": "prac_1", "type": "conceptual", "text": "...",\n'
+                    '      "options": {"A": "...", "B": "...", "C": "...", "D": "..."},\n'
+                    '      "correct": "A", "explanation": "..."\n'
+                    '    }\n'
+                    '  ]\n'
+                    "}"
+                )
+                res = active_provider.generate_structured(
+                    schema={},
+                    prompt=prompt,
+                    system_instruction="You are the DeepLearnX Senior Pedagogical Remediator. Respond strictly in valid JSON."
+                )
+                llm_data = res.content
+                if isinstance(llm_data, dict) and "sections" in llm_data and len(llm_data["sections"]) >= 10:
+                    p_qs = llm_data.get("practice_questions", [])
+                    md_lines = [
+                        f"# DeepLearnX Remedial Learning Guide: {cname}",
+                        f"*Discipline: {domain_name} | Concept ID: `{concept_id}` | Mode: Live Cloud LLM ({res.provider.upper()})*\n",
+                        "---"
+                    ]
+                    for sec in llm_data["sections"]:
+                        md_lines.append(f"\n## {sec['section_number']}. {sec['title']}\n")
+                        md_lines.append(sec.get("content", ""))
+                    if p_qs:
+                        for idx, pq in enumerate(p_qs):
+                            md_lines.append(f"\n**Q{idx+1} ({pq.get('type', 'Conceptual').title()}): {pq.get('text', '')}**")
+                            for ltr, opt in pq.get("options", {}).items():
+                                md_lines.append(f"- **{ltr}**: {opt}")
+                            md_lines.append(f"*Correct Answer*: **{pq.get('correct', 'A')}** — {pq.get('explanation', '')}")
+
+                    return {
+                        "concept_id": concept_id,
+                        "concept_name": cname,
+                        "domain_id": domain_id,
+                        "domain_name": domain_name,
+                        "sections_count": len(llm_data["sections"]),
+                        "sections": llm_data["sections"],
+                        "practice_questions": p_qs,
+                        "full_markdown": "\n".join(md_lines),
+                        "generation_source": "live_llm",
+                        "llm_provider": res.provider,
+                        "model_name": res.model,
+                        "learning_gain_status": "POST-REMEDIATION LEARNING GAIN NOT YET MEASURED"
+                    }
+        except Exception as e:
+            logger.warning(f"Live LLM remedial lesson generation failed ({e}); falling back to offline synthesizer.")
 
     practice_questions_list = questions if questions else [
         {
@@ -556,7 +653,9 @@ def generate_12_section_remedial_document(
         "sections_count": len(sections),
         "sections": sections,
         "practice_questions": practice_questions_list,
-        "full_markdown": full_markdown
+        "full_markdown": full_markdown,
+        "generation_source": "offline_knowledge_synthesis",
+        "learning_gain_status": "POST-REMEDIATION LEARNING GAIN NOT YET MEASURED"
     }
 
 

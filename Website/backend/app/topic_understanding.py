@@ -193,6 +193,201 @@ AMBIGUITY_CATALOG = {
             "subdiscipline": "Cybersecurity",
             "scope": "Self-replicating malicious code, infection vectors, executable payload execution, and signature detection."
         }
+    ],
+    "python": [
+        {
+            "id": "python_cs",
+            "title": "Python (High-Level Programming Language & Software Engineering)",
+            "discipline": "Computer Science",
+            "subdiscipline": "Software Engineering & Data Science",
+            "scope": "Python syntax, dynamic typing, memory management, data structures, and standard libraries."
+        },
+        {
+            "id": "python_bio",
+            "title": "Python (Constricting Serpents & Herpetology)",
+            "discipline": "Biological Sciences",
+            "subdiscipline": "Zoology & Herpetology",
+            "scope": "Pythonidae taxonomy, predatory constricting mechanics, metabolic adaptations, and ecological habitats."
+        }
+    ],
+    "go": [
+        {
+            "id": "go_cs",
+            "title": "Go / Golang (Systems Programming & Concurrency)",
+            "discipline": "Computer Science",
+            "subdiscipline": "Programming Language Theory",
+            "scope": "Goroutines, channels, CSP concurrency, static compilation, and cloud systems software."
+        },
+        {
+            "id": "go_game",
+            "title": "Go (Ancient Abstract Strategy Board Game / Weiqi)",
+            "discipline": "Games & Cultural History",
+            "subdiscipline": "Combinatorial Game Theory",
+            "scope": "Grid stone placement, liberties, territory capture, life-and-death tactical patterns, and endgame scoring."
+        }
+    ],
+    "swift": [
+        {
+            "id": "swift_cs",
+            "title": "Swift (Apple Platform Programming & Type Safety)",
+            "discipline": "Computer Science",
+            "subdiscipline": "Software Engineering",
+            "scope": "Swift language protocol-oriented design, ARC memory management, optionals, and iOS/macOS architecture."
+        },
+        {
+            "id": "swift_lit",
+            "title": "Jonathan Swift (Satirical Literature & Gulliver's Travels)",
+            "discipline": "Literature & Humanities",
+            "subdiscipline": "18th-Century Anglo-Irish Literature",
+            "scope": "Satirical prose, political allegories, irony, and Enlightenment social critique."
+        },
+        {
+            "id": "swift_bio",
+            "title": "Swift Birds (Apodidae & Aerodynamic Avian Biology)",
+            "discipline": "Biological Sciences",
+            "subdiscipline": "Ornithology",
+            "scope": "Aerial adaptations of family Apodidae, sustained flight mechanics, nesting biology, and insectivorous foraging."
+        }
+    ],
+    "charge": [
+        {
+            "id": "charge_phys",
+            "title": "Electric Charge (Electromagnetism & Coulomb's Law)",
+            "discipline": "Physics",
+            "subdiscipline": "Classical Electromagnetism",
+            "scope": "Coulombs, electrostatic force, charge quantization, electric fields, and Gauss's law."
+        },
+        {
+            "id": "charge_law",
+            "title": "Criminal Charge (Jurisprudence & Indictment)",
+            "discipline": "Law & Jurisprudence",
+            "subdiscipline": "Criminal Procedure",
+            "scope": "Formal accusation, indictment standards, elements of criminal offenses, and due process rights."
+        },
+        {
+            "id": "charge_fin",
+            "title": "Financial Charge (Banking & Credit Transactions)",
+            "discipline": "Economics & Finance",
+            "subdiscipline": "Banking & Consumer Finance",
+            "scope": "Transaction debits, interest rates, ledger entries, service fee structures, and credit accounting."
+        }
+    ],
+    "field": [
+        {
+            "id": "field_math",
+            "title": "Field (Abstract Algebra & Galois Theory)",
+            "discipline": "Mathematics",
+            "subdiscipline": "Abstract Algebra",
+            "scope": "Algebraic structures with addition and multiplication, field extensions, Galois theory, and finite fields."
+        },
+        {
+            "id": "field_phys",
+            "title": "Field (Classical & Quantum Field Theory)",
+            "discipline": "Physics",
+            "subdiscipline": "Field Theory & Theoretical Physics",
+            "scope": "Continuous physical quantities across space-time, gravitational/electromagnetic fields, and wave equations."
+        },
+        {
+            "id": "field_agri",
+            "title": "Agricultural Field (Agronomy & Crop Management)",
+            "discipline": "Agricultural Sciences",
+            "subdiscipline": "Agronomy & Soil Science",
+            "scope": "Crop rotation, soil fertility management, drainage systems, and arable farmland cultivation."
+        }
+    ],
+    "state": [
+        {
+            "id": "state_poli",
+            "title": "Sovereign State (Political Philosophy & Governance)",
+            "discipline": "Political Science",
+            "subdiscipline": "International Relations & Governance",
+            "scope": "Monopoly on legitimate force, sovereignty, constitutional apparatus, and Westphalian state systems."
+        },
+        {
+            "id": "state_phys",
+            "title": "States of Matter (Thermodynamics & Phase Transitions)",
+            "discipline": "Physics & Chemistry",
+            "subdiscipline": "Thermodynamics & Condensed Matter",
+            "scope": "Solid, liquid, gas, and plasma phases, latent heat, phase equilibria, and intermolecular forces."
+        },
+        {
+            "id": "state_cs",
+            "title": "Program State (Automata & Computational Systems)",
+            "discipline": "Computer Science",
+            "subdiscipline": "Computation Theory & Software Architecture",
+            "scope": "Deterministic finite automata, memory state representations, state machines, and stateless architectures."
+        }
+    ],
+    "revolution": [
+        {
+            "id": "revolution_hist",
+            "title": "Political Revolution (Sociology & Modern History)",
+            "discipline": "History & Humanities",
+            "subdiscipline": "Comparative Historical Revolutions",
+            "scope": "Structural overthrow of political orders (French, American, Russian revolutions), regime transformation, and civil conflict."
+        },
+        {
+            "id": "revolution_astro",
+            "title": "Orbital Revolution (Celestial Mechanics & Orbital Physics)",
+            "discipline": "Physics & Astronomy",
+            "subdiscipline": "Classical Mechanics & Orbital Dynamics",
+            "scope": "Keplerian orbital periods, gravitational central-force motion, circular/elliptical orbits, and sidereal periods."
+        }
+    ],
+    "function": [
+        {
+            "id": "function_math",
+            "title": "Mathematical Function (Calculus & Set Theory)",
+            "discipline": "Mathematics",
+            "subdiscipline": "Mathematical Analysis",
+            "scope": "Mappings from domain to codomain, bijective relations, continuous transformations, and function composition."
+        },
+        {
+            "id": "function_cs",
+            "title": "Subroutine / Function (Computer Programming)",
+            "discipline": "Computer Science",
+            "subdiscipline": "Programming Language Paradigms",
+            "scope": "Subroutines, pure functions, call stack frames, parameter passing semantics, and lambda calculus."
+        },
+        {
+            "id": "function_bio",
+            "title": "Physiological Function (Anatomy & Systemic Biology)",
+            "discipline": "Biological Sciences",
+            "subdiscipline": "Animal & Human Physiology",
+            "scope": "Biological organ function, homeostasis maintenance, feedback loops, and physiological adaptations."
+        }
+    ],
+    "mass": [
+        {
+            "id": "mass_phys",
+            "title": "Mass (Newtonian & Relativistic Physics)",
+            "discipline": "Physics",
+            "subdiscipline": "Classical Mechanics & Relativity",
+            "scope": "Inertial vs gravitational mass, kilograms, Newton's second law, relativistic mass-energy equivalence (E=mc²)."
+        },
+        {
+            "id": "mass_relig",
+            "title": "The Mass (Eucharistic Liturgy & Ecclesiastical History)",
+            "discipline": "Religious Studies & History",
+            "subdiscipline": "Christian Liturgical History",
+            "scope": "Liturgy of the Eucharist, historical development of the Roman rite, sacramental theology, and choral traditions."
+        }
+    ],
+    "culture": [
+        {
+            "id": "culture_soc",
+            "title": "Culture (Anthropology & Social Sciences)",
+            "discipline": "Sociology & Anthropology",
+            "subdiscipline": "Cultural Anthropology",
+            "scope": "Shared beliefs, norms, semiotics, material culture, linguistic transmission, and societal institutions."
+        },
+        {
+            "id": "culture_bio",
+            "title": "Microbiological Culture (Bacteriology & Cell Culture)",
+            "discipline": "Biological Sciences",
+            "subdiscipline": "Microbiology & Biotechnology",
+            "scope": "In vitro microbial propagation, nutrient agar inoculation, aseptic techniques, and colony morphology."
+        }
     ]
 }
 
@@ -307,6 +502,34 @@ class TopicUnderstandingEngine:
                 ambiguities=ambig_candidates,
                 confidence=0.5
             )
+
+        # 1b. Dynamic LLM Polysemy check for unknown terms when live provider is active
+        active_provider = self.provider_manager.get_active_provider()
+        if not ambig_candidates and not selected_disambiguation and not (syllabus_text and len(syllabus_text) > 30) and active_provider and not force_offline:
+            try:
+                polysemy_sys = (
+                    "You are a linguistic polysemy and academic curriculum analyzer. "
+                    "Determine whether the input term has multiple fundamentally different academic meanings across different disciplines "
+                    "(e.g., Computer Science vs Biology vs Physics vs History). "
+                    "Return JSON with keys: is_ambiguous (bool), ambiguities (list of objects with id, title, discipline, subdiscipline, scope)."
+                )
+                polysemy_prompt = f"Analyze the topic '{clean_topic}' for cross-disciplinary polysemy."
+                p_res = active_provider.generate_structured(schema={}, prompt=polysemy_prompt, system_instruction=polysemy_sys)
+                p_data = p_res.content
+                if isinstance(p_data, dict) and p_data.get("is_ambiguous") and isinstance(p_data.get("ambiguities"), list) and len(p_data["ambiguities"]) >= 2:
+                    return TopicInterpretation(
+                        original_query=topic,
+                        canonical_title=clean_topic.title(),
+                        discipline="Ambiguous Topic",
+                        subdiscipline="Multiple Meanings Detected",
+                        scope=f"'{clean_topic}' has multiple distinct academic interpretations. Please select the intended scope.",
+                        is_ambiguous=True,
+                        ambiguities=p_data["ambiguities"],
+                        confidence=0.5,
+                        generation_mode="live_llm"
+                    )
+            except Exception as pe:
+                logger.debug(f"Dynamic LLM polysemy check skipped/failed: {pe}")
 
         # If a specific disambiguation was chosen from the ambiguity modal or resolved by context
         selected_cand = resolved_cand

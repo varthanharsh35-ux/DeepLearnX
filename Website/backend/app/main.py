@@ -1065,6 +1065,8 @@ def get_remedial_lesson_endpoint(concept_id: str, domain: Optional[str] = None):
         except ImportError:
             from backend.app.concept_guide import generate_12_section_remedial_document
     doc = generate_12_section_remedial_document(concept_id, domain)
+    if isinstance(doc, dict) and "learning_gain_status" not in doc:
+        doc["learning_gain_status"] = "POST-REMEDIATION LEARNING GAIN NOT YET MEASURED"
     return doc
 
 @app.get("/api/remedial/questions")

@@ -142,8 +142,8 @@ CRITICAL RULES:
    - The DAG topology should match the actual epistemic structure of the topic:
      * Linear: sequential progression (c1 -> c2 -> c3 -> c4)
      * Branching: single foundational concept branching into multiple specialized concepts (c1 -> c2, c1 -> c3, etc.)
-     * Multi-Root Merging: multiple independent foundations converging into an integrated concept ({c1, c2} -> c3 -> c4)
-     * Diamond: foundational root branching into two distinct dimensions that synthesize into an advanced application (c1 -> c2, c1 -> c3, {c2, c3} -> c4)
+     * Multi-Root Merging: multiple independent foundations converging into an integrated concept ({{c1, c2}} -> c3 -> c4)
+     * Diamond: foundational root branching into two distinct dimensions that synthesize into an advanced application (c1 -> c2, c1 -> c3, {{c2, c3}} -> c4)
    - Ensure the prerequisites strictly form a valid Directed Acyclic Graph without cycles or self-dependencies.
 
 You MUST respond ONLY with a valid JSON object matching this schema:
@@ -284,124 +284,55 @@ def clean_and_parse_llm_json(raw_text: str) -> Optional[Dict[str, Any]]:
         return None
 
 def generate_via_gemini_api(topic_title: str, syllabus_text: str, api_key: str, model_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Calls Google Gemini REST API to generate structured cognitive assessment with model fallbacks and backoff."""
-    # Official Google Gemini API model identifiers for v1beta
-    default_candidates = [
-        "gemini-1.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-pro",
-        "gemini-2.0-flash-lite",
-        "gemini-flash-latest"
-    ]
-    if model_name:
-        candidate_models = [model_name] + [m for m in default_candidates if m != model_name]
-    else:
-        candidate_models = default_candidates
+    """Calls Google Gemini via authoritative LLMProviderManager with structured JSON parsing."""
+    try:
+        from providers.manager import get_provider_manager
+    except ImportError:
+        try:
+            from app.providers.manager import get_provider_manager
+        except ImportError:
+            from backend.app.providers.manager import get_provider_manager
 
-    # Guard prompt size to stay within token quotas
-    trimmed_syllabus = (syllabus_text or "").strip()
-    if len(trimmed_syllabus) > 3000:
-        trimmed_syllabus = trimmed_syllabus[:3000]
+    mgr = get_provider_manager()
+    prompt = build_llm_system_prompt(topic_title, syllabus_text)
+    res = mgr.generate_structured(
+        schema={},
+        prompt=prompt,
+        system_instruction="You are an expert cognitive educational psychometrician who produces valid JSON assessments.",
+        provider_override="gemini",
+        model_override=model_name,
+        api_key_override=api_key
+    )
+    content = res.content
+    if isinstance(content, dict):
+        content["_model_used"] = res.model
+    return content
 
-    prompt = build_llm_system_prompt(topic_title, trimmed_syllabus)
-    
-    payload = {
-        "contents": [
-            {
-                "parts": [{"text": prompt}]
-            }
-        ],
-        "generationConfig": {
-            "response_mime_type": "application/json",
-            "temperature": 0.2
-        }
-    }
-    
-    last_error = None
-    with httpx.Client(timeout=30.0) as client:
-        for m in candidate_models:
-            if not m:
-                continue
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent?key={api_key}"
-            try:
-                response = client.post(url, json=payload)
-                if response.status_code == 200:
-                    data = response.json()
-                    candidates = data.get("candidates", [])
-                    if candidates and "content" in candidates[0] and "parts" in candidates[0]["content"]:
-                        raw_text = candidates[0]["content"]["parts"][0].get("text", "")
-                        parsed = clean_and_parse_llm_json(raw_text)
-                        if parsed and "concepts" in parsed and "questions" in parsed:
-                            print(f"[Gemini API] Successfully generated assessment using {m}!")
-                            parsed["_model_used"] = m
-                            return parsed
-                        else:
-                            print(f"[Gemini API Attempt] Model {m} returned JSON missing concepts/questions")
-                elif response.status_code in (429, 503):
-                    print(f"[Gemini API Attempt] Model {m} returned HTTP {response.status_code}. Trying next candidate...")
-                    last_error = f"HTTP {response.status_code}: Model overloaded or rate limit reached"
-                    continue
-                else:
-                    err_text = ""
-                    try:
-                        err_json = response.json()
-                        err_text = err_json.get("error", {}).get("message", response.text[:200])
-                    except Exception:
-                        err_text = response.text[:200]
-                    last_error = f"HTTP {response.status_code}: {err_text}"
-                    print(f"[Gemini API Error] Model {m}: {last_error}")
-                    # If invalid key (400/403), stop immediately instead of retrying across all candidates
-                    if response.status_code in (400, 403):
-                        break
-            except Exception as e:
-                last_error = str(e)
-                print(f"[Gemini API Exception] Model {m}: {e}")
-                continue
-                
-    if last_error:
-        raise RuntimeError(f"Gemini API generation failed: {last_error}")
-    return None
 
 def generate_via_openai_api(topic_title: str, syllabus_text: str, api_key: str, model_name: str = "gpt-4o-mini") -> Optional[Dict[str, Any]]:
-    """Calls OpenAI REST API to generate structured cognitive assessment."""
-    url = "https://api.openai.com/v1/chat/completions"
-    prompt = build_llm_system_prompt(topic_title, syllabus_text)
-    
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "model": model_name,
-        "messages": [
-            {"role": "system", "content": "You are an expert cognitive educational psychometrician who produces valid JSON assessments."},
-            {"role": "user", "content": prompt}
-        ],
-        "response_format": {"type": "json_object"},
-        "temperature": 0.2
-    }
-    
-    with httpx.Client(timeout=45.0) as client:
+    """Calls OpenAI via authoritative LLMProviderManager with structured JSON parsing."""
+    try:
+        from providers.manager import get_provider_manager
+    except ImportError:
         try:
-            response = client.post(url, json=payload, headers=headers)
-            if response.status_code != 200:
-                err_text = response.text[:200]
-                try:
-                    err_json = response.json()
-                    err_text = err_json.get("error", {}).get("message", err_text)
-                except Exception:
-                    pass
-                raise RuntimeError(f"OpenAI API HTTP {response.status_code}: {err_text}")
-            
-            data = response.json()
-            content = data["choices"][0]["message"]["content"]
-            parsed = clean_and_parse_llm_json(content)
-            if parsed:
-                parsed["_model_used"] = model_name
-            return parsed
-        except Exception as e:
-            raise RuntimeError(f"OpenAI API call failed: {e}")
+            from app.providers.manager import get_provider_manager
+        except ImportError:
+            from backend.app.providers.manager import get_provider_manager
+
+    mgr = get_provider_manager()
+    prompt = build_llm_system_prompt(topic_title, syllabus_text)
+    res = mgr.generate_structured(
+        schema={},
+        prompt=prompt,
+        system_instruction="You are an expert cognitive educational psychometrician who produces valid JSON assessments.",
+        provider_override="openai",
+        model_override=model_name,
+        api_key_override=api_key
+    )
+    content = res.content
+    if isinstance(content, dict):
+        content["_model_used"] = res.model
+    return content
 
 def check_provider_status() -> Dict[str, Any]:
     """Reports live provider status, configuration, reachability, and active generation mode."""
@@ -431,11 +362,14 @@ def check_provider_status() -> Dict[str, Any]:
 
     active_mode = mgr_status.get("active_mode", "offline_knowledge_synthesis")
     live_ready = mgr_status.get("live_llm_ready", False)
+    provider_state = mgr_status.get("provider_state", "not_configured")
 
     return {
         "status": "ready" if live_ready else "offline_ready",
         "live_llm_ready": live_ready,
         "active_mode": active_mode,
+        "provider_state": provider_state,
+        "last_generation_status": mgr_status.get("last_generation_status"),
         "selected_provider": mgr_status.get("selected_provider", "offline_synthesizer"),
         "model": mgr_status.get("model", "deterministic_taxonomy_engine"),
         "offline_ready": True,
@@ -1643,38 +1577,43 @@ class SyllabusGeneratorEngine:
         model_used = None
         provider_error = None
 
-        if require_live_llm and not resolved_key:
+        try:
+            from providers.manager import get_provider_manager
+        except ImportError:
+            try:
+                from app.providers.manager import get_provider_manager
+            except ImportError:
+                from backend.app.providers.manager import get_provider_manager
+
+        mgr = get_provider_manager()
+        active_prov = mgr.get_active_provider()
+        has_credentials = bool(explicit_key_provided or (active_prov and active_prov.config.api_key))
+
+        if require_live_llm and not has_credentials:
             raise ValueError("Live LLM generation was requested, but no valid API key was found in Website/.env or request parameters. Configure GEMINI_API_KEY or OPENAI_API_KEY to proceed.")
 
-        if resolved_key:
-            valid_format = False
-            if provider == "openai" and (resolved_key.startswith("sk-") or "openai" in resolved_key.lower()):
-                valid_format = True
-            elif provider == "gemini" and resolved_key.startswith("AIzaSy"):
-                valid_format = True
-            
-            if not valid_format:
-                warning_msg = f"Key for {provider} does not match official format prefix ('AIzaSy...' for Gemini, 'sk-...' for OpenAI)."
-                print(f"[AI Key Warning] {warning_msg}")
+        if has_credentials:
+            print(f"[AI Generator] Calling {provider} via LLMProviderManager for topic '{topic_title}'...")
+            try:
+                prompt = build_llm_system_prompt(topic_title, syllabus_text)
+                gen_res = mgr.generate_structured(
+                    schema={},
+                    prompt=prompt,
+                    system_instruction="You are an expert cognitive educational psychometrician who produces valid JSON assessments.",
+                    provider_override=provider,
+                    model_override=model_name,
+                    api_key_override=api_key if explicit_key_provided else None
+                )
+                if gen_res and gen_res.content and isinstance(gen_res.content, dict) and "concepts" in gen_res.content and "questions" in gen_res.content:
+                    parsed_llm_data = gen_res.content
+                    llm_used = True
+                    model_used = gen_res.model
+                    provider = gen_res.provider
+            except Exception as e:
+                provider_error = str(e)
+                print(f"[AI Generator Failure via LLMProviderManager] {provider_error}")
                 if require_live_llm or explicit_key_provided:
-                    raise ValueError(warning_msg)
-            else:
-                print(f"[AI Generator] Calling {provider} API for topic '{topic_title}'...")
-                try:
-                    if provider == "openai":
-                        m = model_name or "gpt-4o-mini"
-                        parsed_llm_data = generate_via_openai_api(topic_title, syllabus_text, resolved_key, m)
-                    else:
-                        m = model_name or "gemini-1.5-flash"
-                        parsed_llm_data = generate_via_gemini_api(topic_title, syllabus_text, resolved_key, m)
-                    if parsed_llm_data:
-                        llm_used = True
-                        model_used = parsed_llm_data.get("_model_used", m)
-                except Exception as e:
-                    provider_error = str(e)
-                    print(f"[AI Generator Failure] {provider_error}")
-                    if require_live_llm or explicit_key_provided:
-                        raise RuntimeError(f"Live LLM generation failed ({provider}): {provider_error}")
+                    raise RuntimeError(f"Live LLM generation failed ({provider}): {provider_error}")
 
         # 2. Check curated domain taxonomy if LLM not used or failed
         if not parsed_llm_data:
@@ -1707,6 +1646,18 @@ class SyllabusGeneratorEngine:
             res["llm_provider"] = provider if llm_used else None
             res["model_name"] = model_used
             res["generation_notice"] = f"Generated live via {provider.upper()} ({model_used})." if llm_used else "Preloaded curated course catalog assessment."
+            res["provenance"] = mgr.create_provenance_record(
+                mode="live_llm" if llm_used else "curated_preloaded_course_catalog",
+                provider=provider if llm_used else None,
+                model=model_used if llm_used else None,
+                stages={
+                    "topic_interpretation_source": "live_llm" if llm_used else "curated_preloaded_course_catalog",
+                    "concept_generation_source": "live_llm" if llm_used else "curated_preloaded_course_catalog",
+                    "question_generation_source": "live_llm" if llm_used else "curated_preloaded_course_catalog",
+                    "probe_generation_source": "live_llm" if llm_used else "curated_preloaded_course_catalog",
+                    "remedial_generation_source": "live_llm" if llm_used else "curated_preloaded_course_catalog",
+                }
+            )
             return res
         else:
             res = self._build_domain_aware_fallback(
@@ -1727,6 +1678,18 @@ class SyllabusGeneratorEngine:
                 res["generation_notice"] = f"API call failed ({provider_error}); generated via authentic offline domain knowledge synthesis."
             else:
                 res["generation_notice"] = "Generated via authentic offline domain knowledge synthesis because no live LLM API key was provided or configured."
+            res["provenance"] = mgr.create_provenance_record(
+                mode="offline_knowledge_synthesis",
+                provider=None,
+                model=None,
+                stages={
+                    "topic_interpretation_source": "offline_knowledge_synthesis",
+                    "concept_generation_source": "offline_knowledge_synthesis",
+                    "question_generation_source": "offline_knowledge_synthesis",
+                    "probe_generation_source": "offline_knowledge_synthesis",
+                    "remedial_generation_source": "offline_knowledge_synthesis",
+                }
+            )
             return res
 
     def _build_from_structured_spec(self, domain_id: str, topic_title: str, spec: Dict[str, Any]) -> Dict[str, Any]:
@@ -1858,14 +1821,24 @@ class SyllabusGeneratorEngine:
                 "reasoning_probe": rp_data
             })
 
-        # Validate before persisting
+        # Validate DAG structure with Kahn's algorithm and repair any non-acyclic dependencies
         try:
-            from quiz_validator import validate_curriculum_package
+            from quiz_validator import validate_knowledge_dag, validate_curriculum_package
         except ImportError:
             try:
-                from app.quiz_validator import validate_curriculum_package
+                from app.quiz_validator import validate_knowledge_dag, validate_curriculum_package
             except ImportError:
-                from backend.app.quiz_validator import validate_curriculum_package
+                from backend.app.quiz_validator import validate_knowledge_dag, validate_curriculum_package
+
+        dag_ok, dag_errs = validate_knowledge_dag(concepts)
+        if not dag_ok:
+            print(f"[DAG Validation Warning] Concepts DAG required topological repair: {dag_errs}")
+            # Enforce strict Kahn acyclicity: eliminate backward references and cycles
+            for idx, c in enumerate(concepts):
+                valid_prior = {concepts[j]["id"] for j in range(idx)}
+                raw_p = c.get("prerequisites", [])
+                c["prerequisites"] = [p for p in raw_p if p in valid_prior]
+
         is_valid, validation_errors = validate_curriculum_package(concepts, misconceptions, questions, category)
         if not is_valid:
             print(f"[Validation Warning] Structured spec had issues: {validation_errors[:3]}")
@@ -2034,3 +2007,5 @@ class SyllabusGeneratorEngine:
 
 # Global engine instance
 syllabus_engine = SyllabusGeneratorEngine()
+SyllabusQuestionBankGenerator = SyllabusGeneratorEngine
+

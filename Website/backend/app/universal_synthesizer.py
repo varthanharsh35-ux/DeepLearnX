@@ -513,8 +513,8 @@ def synthesize_universal_questions(
     potential_probe_indices = [idx for idx, t in enumerate(tier_plan) if t in ("conceptual", "application")]
     selected_probe_indices = set(random.sample(potential_probe_indices, min(4, len(potential_probe_indices))))
 
-    # Compute pattern offset from domain_id and seed_offset to guarantee distinct stems across runs
-    base_pattern_offset = (abs(hash(domain_id)) + seed_offset) % 12
+    # Compute pattern offset from topic and seed_offset to guarantee strictly distinct stems across runs
+    base_pattern_offset = (seed_offset * 3 + (abs(hash(topic)) % 12)) % 12
     tier_counters = {"basic": 0, "conceptual": 0, "application": 0}
     seen_stems = set()
 

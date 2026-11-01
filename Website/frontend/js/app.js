@@ -1532,11 +1532,29 @@ async function loadSavedApiKey() {
   try {
     const status = await API.getProviderStatus();
     if (pill) {
-      if (status.live_llm_ready || (savedKey && savedKey.trim())) {
-        pill.textContent = "🟢 Live LLM Active";
+      const state = status.provider_state || (status.live_llm_ready ? "reachable" : "offline_knowledge_synthesis");
+      const providerName = status.selected_provider && status.selected_provider !== "offline_synthesizer" ? ` (${status.selected_provider})` : "";
+
+      if (status.live_llm_ready || state === "live_generation_succeeded" || state === "reachable") {
+        pill.textContent = `🟢 Live LLM Active${providerName}`;
         pill.style.background = "rgba(16, 185, 129, 0.2)";
         pill.style.borderColor = "#10b981";
         pill.style.color = "#6ee7b7";
+      } else if (state === "configured") {
+        pill.textContent = `🟡 Key Configured (Verifying)${providerName}`;
+        pill.style.background = "rgba(245, 158, 11, 0.18)";
+        pill.style.borderColor = "#f59e0b";
+        pill.style.color = "#fcd34d";
+      } else if (state === "provider_unavailable") {
+        pill.textContent = "🔴 Provider Unavailable (Offline Fallback)";
+        pill.style.background = "rgba(239, 68, 68, 0.18)";
+        pill.style.borderColor = "#ef4444";
+        pill.style.color = "#fca5a5";
+      } else if (state === "generation_failed") {
+        pill.textContent = "⚠️ Generation Failed (Offline Fallback)";
+        pill.style.background = "rgba(249, 115, 22, 0.18)";
+        pill.style.borderColor = "#f97316";
+        pill.style.color = "#fdba74";
       } else {
         pill.textContent = "🌐 Offline Knowledge Synthesis";
         pill.style.background = "rgba(99, 102, 241, 0.15)";
@@ -1546,6 +1564,12 @@ async function loadSavedApiKey() {
     }
   } catch (e) {
     console.warn("Could not retrieve provider status", e);
+    if (pill) {
+      pill.textContent = "🌐 Offline Knowledge Synthesis";
+      pill.style.background = "rgba(99, 102, 241, 0.15)";
+      pill.style.borderColor = "#6366f1";
+      pill.style.color = "#a5b4fc";
+    }
   }
 }
 

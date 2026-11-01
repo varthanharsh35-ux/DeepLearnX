@@ -760,11 +760,11 @@ All 7 test suites pass 100% across the repository:
 | `Website/tests/test_answer_security.py` | Client payload sanitization, zero leaked keys/probes | 3 | 0 | **PASS** |
 | `Website/tests/test_api.py` | FastAPI auth, assessment endpoints, model inference | 7 | 0 | **PASS** |
 | `Website/tests/test_custom_and_unseen.py` | 30 non-repeating questions, custom topic synthesis | 2 | 0 | **PASS** |
-| `Website/tests/test_llm_providers.py` | Official SDK mocks, key masking, rate-limit backoff, offline fallback | 9 | 0 | **PASS** |
+| `Website/tests/test_llm_providers.py` | Official SDK mocks, key masking, rate-limit backoff, multi-provider failover, 7 states, provider spies | 16 | 0 | **PASS** |
 | `Website/tests/test_phase2_universal_intelligence.py` | Ambiguity detection, cross-discipline synthesis, 6 cognitive states, remedial gains | 16 | 0 | **PASS** |
 | `Website/tests/test_regressions.py` | Core model and diagnostic regressions | 10 | 0 | **PASS** |
 | `Website/tests/test_universal_regressions.py` | 24 universal regressions (A–X) & 3 generalization groups | 28 | 0 | **PASS** |
-| **TOTAL** | **Full Repository Verification** | **75** | **0** | **100% PASS** |
+| **TOTAL** | **Full Repository Verification** | **82** | **0** | **100% PASS** |
 
 ### 10. Phase 2 Release Verification Matrix
 
@@ -776,8 +776,130 @@ All 7 test suites pass 100% across the repository:
 | **Two-Tier Diagnostic Probes** | 3–4 probes per assessment, randomized placement, zero answer-key leaks | **PASS** |
 | **Cognitive Diagnostics** | PyTorch `DeepCognitiveNet`, 6-state classification, anti-gaming filters | **PASS** |
 | **Remedial Learning Gain** | 12-section remedial modules, transfer drills, authentic Hake gain calculation | **PASS** |
-| **Test Suite Pass Rate** | 75 passed / 75 total across all 7 test suites in 166.98s | **100% PASS** |
+| **Test Suite Pass Rate** | 82 passed / 82 total across all 7 test suites in 165.80s | **100% PASS** |
 | **Live Server Status** | Daemon listening on ports 8055 & 8000, `/api/health` returns HTTP 200 | **PASS** |
+
+---
+
+## 11. PHASE 2.1 — LIVE LLM INTEGRATION, END-TO-END INTELLIGENCE WIRING & EDUCATIONAL QUALITY VERIFICATION
+
+### 11.1 Context & Objective
+While Phase 2 implemented provider classes, topic understanding, and diagnostic models, the running application runtime reported:
+```
+live_llm_ready: false
+active_mode: offline_knowledge_synthesis
+selected_provider: offline_synthesizer
+```
+Phase 2.1 connected the Gemini/OpenAI provider infrastructure directly into the production assessment pipeline, eliminated legacy bypasses, wired end-to-end stage provenance, and verified system behavior under both live provider emulation and authentic offline synthesis.
+
+### 11.2 Authoritative Single Engine Unification
+Previously, `syllabus_generator.py` defined and called its own older raw-`httpx` functions (`generate_via_gemini_api` and `generate_via_openai_api`), bypassing `LLMProviderManager`. 
+
+Under Phase 2.1:
+1. `LLMProviderManager` (`Website/backend/app/providers/manager.py`) is the sole authoritative LLM execution engine.
+2. Implemented `generate_structured()` and `generate_text()` with dynamic request-scoped overrides (`api_key_override`, `provider_override`, `model_override`) and automatic failover between Gemini and OpenAI.
+3. Legacy functions in `syllabus_generator.py` now delegate cleanly to `LLMProviderManager.generate_structured()`.
+4. Global module aliasing across `sys.modules` (`backend.app.providers.manager`, `app.providers.manager`, `providers.manager`) guarantees a unified singleton instance across all execution modes.
+
+### 11.3 7-State Provider Lifecycle Taxonomy
+The system strictly distinguishes 7 distinct provider lifecycle states in `LLMProviderManager.get_status()`:
+
+```mermaid
+stateDiagram-v2
+    [*] --> not_configured : No API key in .env
+    not_configured --> configured : API key added
+    configured --> reachable : Network ping succeeds
+    configured --> provider_unavailable : Network drop / timeout
+    reachable --> live_generation_succeeded : Live assessment generated
+    reachable --> generation_failed : Format / schema / auth error
+    reachable --> provider_unavailable : 503 Overload / timeout
+    provider_unavailable --> reachable : Reconnection succeeds
+    generation_failed --> reachable : Next request recovers
+    not_configured --> offline_knowledge_synthesis : Authentic Offline Fallback
+```
+
+1. `not_configured`: Neither Gemini nor OpenAI keys are configured.
+2. `configured`: Key exists, but network connectivity has not been established yet.
+3. `reachable`: Verified reachable via non-destructive connection probe.
+4. `live_generation_succeeded`: Live structured curriculum generation succeeded.
+5. `provider_unavailable`: Network error, DNS failure, or 503 service outage.
+6. `generation_failed`: Generation call returned schema error or refusal.
+7. `offline_knowledge_synthesis`: Operating in authentic offline mode.
+
+The frontend status pill in `Website/frontend/js/app.js` and `/api/assessment/provider-status` now accurately reflect these 7 states instead of assuming "Live LLM Active" from client-side `localStorage`.
+
+### 11.4 Stage-Level Provenance Tracking
+Every curriculum generated via `generate_custom_domain()` now includes a verifiable `provenance` record tracking the origin of each pedagogical stage:
+```json
+{
+  "overall_mode": "live_llm",
+  "provider": "gemini",
+  "model": "gemini-1.5-flash",
+  "topic_interpretation_source": "live_llm",
+  "concept_generation_source": "live_llm",
+  "question_generation_source": "live_llm",
+  "probe_generation_source": "live_llm",
+  "remedial_generation_source": "live_llm",
+  "timestamp": 1793555200.0
+}
+```
+When operating in offline synthesis mode, each stage is honestly and transparently recorded as `"offline_knowledge_synthesis"`.
+
+### 11.5 Dynamic Cross-Disciplinary Polysemy & Ambiguity Handling
+1. **Catalog Expansion**: Expanded `AMBIGUITY_CATALOG` in `topic_understanding.py` with 10 multi-disciplinary terms:
+   - `python` (Computer Science vs Herpetology/Zoology)
+   - `go` (Systems Programming vs Ancient Abstract Strategy Game)
+   - `swift` (Apple Platform Programming vs Satirical Literature vs Ornithology)
+   - `charge` (Electromagnetism vs Criminal Jurisprudence vs Financial Accounting)
+   - `field` (Abstract Algebra vs Classical Field Theory vs Agronomy)
+   - `state` (Political Governance vs States of Matter vs Automata State Machines)
+   - `revolution` (Political History vs Celestial Orbital Mechanics)
+   - `function` (Mathematical Analysis vs Programming Subroutines vs Organ Physiology)
+   - `mass` (Classical/Relativistic Physics vs Christian Eucharistic Liturgy)
+   - `culture` (Anthropology & Sociology vs Microbiological Cell Propagation)
+2. **Dynamic Live Polysemy Analysis**: For arbitrary unknown terms submitted without student context, `TopicUnderstandingEngine` queries the active live LLM to determine cross-disciplinary ambiguity dynamically before generating questions.
+
+### 11.6 Adaptive Remedial Instruction & Post-Remediation Gain Tracking
+1. `generate_12_section_remedial_document` in `Website/backend/app/concept_guide.py` accepts live provider calls, prompting the model with the student's exact missed question, chosen distractor, and target principle to produce an adaptive 12-section master lesson.
+2. Before the student completes the post-remediation practice drill, the system reports:
+   ```json
+   "learning_gain_status": "POST-REMEDIATION LEARNING GAIN NOT YET MEASURED"
+   ```
+   Zero fabricated gains are generated.
+3. Upon drill submission, authentic Hake's normalized gain is computed:
+   $$g = \frac{\text{Post} - \text{Pre}}{1 - \text{Pre}}$$
+
+### 11.7 Ready-to-Run Live Smoke Test Script
+A safe, human-readable CLI verification script was created at `Website/tests/smoke_test_live_provider.py`:
+- Checks environment variables and optional `--key`, `--provider`, and `--topic` CLI flags.
+- If credentials are unset, exits cleanly (exit code 0) with clear setup instructions:
+  ```
+  ######################################################################
+   [STATUS: BLOCKED -- LIVE PROVIDER CREDENTIALS NOT CONFIGURED]
+  ######################################################################
+  To activate live LLM generation:
+    1. Open 'Website/.env' (copy from 'Website/.env.example' if needed)
+    2. Add your Google Gemini API key:
+         GEMINI_API_KEY=AIzaSy...
+       Or your OpenAI API key:
+         OPENAI_API_KEY=sk-...
+    3. Re-run this smoke test script:
+         python Website/tests/smoke_test_live_provider.py
+  ```
+- If credentials are configured, executes live generation, verifies Kahn's DAG acyclicity, validates option length balance, checks two-tier reasoning probes, and verifies stage provenance.
+
+### 11.8 Database Sanitization & Canonical Integrity
+The runtime SQLite database (`Website/database/deeplearnx.db`) was audited and sanitized:
+- **Canonical Domains**: 5 (`pokemon`, `class10_chemistry`, `class10_biology`, `class10_math`, `deep_learning`)
+- **Canonical Questions**: 185
+- **Canonical Demo Users**: 5
+- **Orphaned Questions / Custom Test Artifacts (`custom_%`)**: 0
+
+### 11.9 End-to-End Verification Summary
+- **Full Pytest Suite**: 82 passed / 82 total (0 failed, 1 warning) in 165.80s (0:02:45).
+- **Provider Unit & Spy Suite** (`test_llm_providers.py`): 16 passed / 16 total.
+- **Live HTTP Daemon**: Ports 8055 & 8000 operational; `/api/health` returns HTTP 200; `/api/assessment/provider-status` returns `provider_state: not_configured`.
+
 
 
 
