@@ -44,7 +44,10 @@ def fetch_wikipedia_knowledge(topic: str) -> List[Dict[str, str]]:
         try:
             from app.curated_extensions import normalize_topic_title
         except ImportError:
-            from backend.app.curated_extensions import normalize_topic_title
+            try:
+                from backend.app.curated_extensions import normalize_topic_title
+            except ImportError:
+                from Website.backend.app.curated_extensions import normalize_topic_title
     clean_topic = normalize_topic_title(clean_topic)
     
     # Check if user topic is genuinely military or history of warfare
@@ -136,11 +139,11 @@ def detect_domain_meta(topic: str, articles: List[Dict[str, str]]) -> Tuple[str,
         return "💻", "Computer Science & Databases"
     elif _matches_any(combined, ["photography", "aperture", "shutter speed", "iso", "exposure", "lens", "camera", "sensor"]):
         return "📷", "Photography & Visual Arts"
-    elif _matches_any(combined, ["japanese", "hiragana", "katakana", "kanji", "particle", "grammar", "linguistic", "syntax"]):
+    elif _matches_any(combined, ["japanese", "hiragana", "katakana", "kanji", "grammatical particle", "grammar", "linguistic", "syntax"]):
         return "🗣️", "Linguistics & Language Studies"
     elif _matches_any(combined, ["volcano", "earthquake", "geology", "tectonic", "mineral", "rock", "fossil", "magma"]):
         return "🌋", "Earth & Geological Sciences"
-    elif _matches_any(combined, ["quantum", "cryptography", "cipher", "encryption", "no-cloning", "entanglement", "qubit"]):
+    elif _matches_any(combined, ["quantum", "quark", "gluon", "hadron", "chromodynamics", "cryptography", "cipher", "encryption", "no-cloning", "entanglement", "qubit", "subatomic", "particle physics"]):
         return "🔐", "Quantum Science & Cryptography"
     elif _matches_any(combined, ["fluid", "viscosity", "hydraulics", "bernoulli", "aerodynamic", "pipe flow"]):
         return "💧", "Fluid Mechanics & Hydraulics"
@@ -179,7 +182,10 @@ def synthesize_authentic_curriculum(
         try:
             from app.universal_synthesizer import synthesize_universal_curriculum
         except ImportError:
-            from backend.app.universal_synthesizer import synthesize_universal_curriculum
+            try:
+                from backend.app.universal_synthesizer import synthesize_universal_curriculum
+            except ImportError:
+                from Website.backend.app.universal_synthesizer import synthesize_universal_curriculum
 
     if articles is None:
         try:
@@ -213,4 +219,7 @@ except ImportError:
     try:
         from app.quiz_validator import balance_sentence as _balance_sentence
     except ImportError:
-        from backend.app.quiz_validator import balance_sentence as _balance_sentence
+        try:
+            from backend.app.quiz_validator import balance_sentence as _balance_sentence
+        except ImportError:
+            from Website.backend.app.quiz_validator import balance_sentence as _balance_sentence

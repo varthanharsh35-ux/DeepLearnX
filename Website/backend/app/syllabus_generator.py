@@ -405,6 +405,17 @@ def generate_via_openai_api(topic_title: str, syllabus_text: str, api_key: str, 
 
 def check_provider_status() -> Dict[str, Any]:
     """Reports live provider status, configuration, reachability, and active generation mode."""
+    try:
+        from providers.manager import get_provider_manager
+    except ImportError:
+        try:
+            from app.providers.manager import get_provider_manager
+        except ImportError:
+            from backend.app.providers.manager import get_provider_manager
+
+    mgr = get_provider_manager()
+    mgr_status = mgr.get_status()
+
     gemini_key = (os.environ.get("GEMINI_API_KEY") or "").strip()
     openai_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
     
@@ -414,52 +425,44 @@ def check_provider_status() -> Dict[str, Any]:
         if len(k) <= 8:
             return "***"
         return f"{k[:6]}...{k[-4:]}"
-        
-    gemini_reachable = False
-    openai_reachable = False
-    try:
-        with httpx.Client(timeout=3.0) as client:
-            resp = client.get("https://generativelanguage.googleapis.com")
-            gemini_reachable = resp.status_code in (200, 400, 404)
-    except Exception:
-        gemini_reachable = False
-        
-    try:
-        with httpx.Client(timeout=3.0) as client:
-            resp = client.get("https://api.openai.com/v1/models")
-            openai_reachable = resp.status_code in (200, 401)
-    except Exception:
-        openai_reachable = False
-        
-    active_mode = "live_llm" if (gemini_key or openai_key) else "offline_knowledge_synthesis"
-    
+
+    gemini_info = mgr_status.get("providers", {}).get("gemini", {})
+    openai_info = mgr_status.get("providers", {}).get("openai", {})
+
+    active_mode = mgr_status.get("active_mode", "offline_knowledge_synthesis")
+    live_ready = mgr_status.get("live_llm_ready", False)
+
     return {
-        "status": "ready" if active_mode == "live_llm" else "offline_ready",
-        "live_llm_ready": bool(gemini_key or openai_key),
+        "status": "ready" if live_ready else "offline_ready",
+        "live_llm_ready": live_ready,
         "active_mode": active_mode,
+        "selected_provider": mgr_status.get("selected_provider", "offline_synthesizer"),
+        "model": mgr_status.get("model", "deterministic_taxonomy_engine"),
+        "offline_ready": True,
         "fallback_mode": "offline_knowledge_synthesis",
+        "fallback_enabled": mgr_status.get("fallback_enabled", True),
         "supported_modes": ["live_llm", "offline_knowledge_synthesis"],
         "providers": {
             "gemini": {
-                "configured": bool(gemini_key),
+                "configured": gemini_info.get("configured", bool(gemini_key)),
                 "key_masked": mask_key(gemini_key),
-                "network_reachable": gemini_reachable,
-                "default_model": os.environ.get("GEMINI_DEFAULT_MODEL", "gemini-1.5-flash"),
-                "supported_models": ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"]
+                "network_reachable": gemini_info.get("reachable", False),
+                "default_model": gemini_info.get("model", os.environ.get("GEMINI_DEFAULT_MODEL", "gemini-1.5-flash")),
+                "supported_models": ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"],
+                "last_status": gemini_info.get("last_status", "unconfigured"),
+                "message": gemini_info.get("message", "")
             },
             "openai": {
-                "configured": bool(openai_key),
+                "configured": openai_info.get("configured", bool(openai_key)),
                 "key_masked": mask_key(openai_key),
-                "network_reachable": openai_reachable,
-                "default_model": os.environ.get("OPENAI_DEFAULT_MODEL", "gpt-4o-mini"),
-                "supported_models": ["gpt-4o-mini", "gpt-4o"]
+                "network_reachable": openai_info.get("reachable", False),
+                "default_model": openai_info.get("model", os.environ.get("OPENAI_DEFAULT_MODEL", "gpt-4o-mini")),
+                "supported_models": ["gpt-4o-mini", "gpt-4o"],
+                "last_status": openai_info.get("last_status", "unconfigured"),
+                "message": openai_info.get("message", "")
             }
         },
-        "notice": (
-            "Live cloud LLM generation is active."
-            if active_mode == "live_llm"
-            else "No API key detected in environment (.env). Custom topics will generate via authentic offline factual knowledge synthesis. Enter a Gemini or OpenAI API key in the UI or Website/.env to activate live LLM generation."
-        )
+        "notice": mgr_status.get("message", "DeepLearnX is operating in authentic offline knowledge synthesis mode.")
     }
 
 # =============================================================================
@@ -1599,7 +1602,8 @@ class SyllabusGeneratorEngine:
         model_name: Optional[str] = None,
         require_live_llm: bool = False,
         dag_type: Optional[str] = None,
-        seed_offset: int = 0
+        seed_offset: int = 0,
+        selected_disambiguation: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Generates full domain assessment:
@@ -1608,6 +1612,18 @@ class SyllabusGeneratorEngine:
         3. If no match, uses dynamic domain-aware synthesis.
         Persists into SQLite and registers concept learning guides.
         """
+        # Resolve disambiguation if student selected a specific meaning
+        if selected_disambiguation:
+            try:
+                from topic_understanding import TopicUnderstandingEngine
+                _engine = TopicUnderstandingEngine()
+                _interp = _engine.interpret(topic_title, syllabus_text, selected_disambiguation=selected_disambiguation)
+                topic_title = _interp.canonical_title
+                if not syllabus_text:
+                    syllabus_text = _interp.scope
+            except Exception:
+                pass
+
         # Clean and normalize topic title
         topic_title = normalize_topic_title(topic_title)
         if not topic_title:

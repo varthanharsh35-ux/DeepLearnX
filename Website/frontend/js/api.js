@@ -95,7 +95,20 @@ const API = {
     return await res.json();
   },
 
-  customGenerateAssessment: async (topicTitle, syllabusText = "", userId = null, numQuestions = 12, apiKey = null, apiProvider = "gemini", modelName = null) => {
+  topicInterpret: async (topicTitle, syllabusText = "") => {
+    const res = await fetch(`${API_BASE}/api/assessment/topic-interpret`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic_title: topicTitle,
+        syllabus_text: syllabusText
+      })
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || "Failed to interpret topic");
+    return await res.json();
+  },
+
+  customGenerateAssessment: async (topicTitle, syllabusText = "", userId = null, numQuestions = 12, apiKey = null, apiProvider = "gemini", modelName = null, selectedDisambiguation = null) => {
     const res = await fetch(`${API_BASE}/api/assessment/custom-generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -106,7 +119,8 @@ const API = {
         num_questions: numQuestions,
         api_key: apiKey,
         api_provider: apiProvider,
-        model_name: modelName
+        model_name: modelName,
+        selected_disambiguation: selectedDisambiguation
       })
     });
     if (!res.ok) throw new Error((await res.json()).detail || "Failed to generate custom assessment");

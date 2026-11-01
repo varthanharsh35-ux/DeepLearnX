@@ -10,7 +10,13 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from architecture import DeepCognitiveNet
+try:
+    from architecture import DeepCognitiveNet
+except ImportError:
+    try:
+        from model.architecture import DeepCognitiveNet
+    except ImportError:
+        from Website.model.architecture import DeepCognitiveNet
 
 BASE_DIR = Path(__file__).resolve().parent
 DATASET_DIR = BASE_DIR.parent / "dataset"

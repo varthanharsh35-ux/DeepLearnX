@@ -1249,6 +1249,32 @@
 
   </main>
 
+  <!-- TOPIC AMBIGUITY RESOLUTION MODAL -->
+  <div id="ambiguityModal" class="modal-backdrop hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; z-index: 10000; padding: 1rem;">
+    <div class="modal-box card" style="max-width: 650px; width: 100%; background: #1e293b; border: 1.5px solid #6366f1; border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: flex-start; padding: 1.25rem 1.5rem; border-bottom: 1px solid #334155;">
+        <div>
+          <span class="badge-tag" style="background: rgba(99, 102, 241, 0.2); border: 1px solid #6366f1; color: #a5b4fc; font-size: 0.75rem; padding: 2px 8px; border-radius: 6px;">Clarification Needed</span>
+          <h2 id="ambiguityModalTitle" style="margin: 0.4rem 0 0; font-size: 1.35rem; color: #f8fafc; font-weight: 700;">Multiple Interpretations Detected</h2>
+        </div>
+        <button class="modal-close-btn" onclick="closeAmbiguityModal()" style="background: none; border: none; font-size: 1.5rem; color: #94a3b8; cursor: pointer;">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.5rem;">
+        <p id="ambiguityModalDesc" style="color: #cbd5e1; font-size: 0.92rem; margin: 0 0 1.25rem; line-height: 1.5;">
+          The topic you entered has multiple distinct academic meanings. Please select which subject you would like to assess:
+        </p>
+        <div id="ambiguityOptionsList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <!-- Dynamically populated options -->
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding: 1rem 1.5rem; border-top: 1px solid #334155; display: flex; justify-content: flex-end;">
+        <button class="btn btn-outline btn-sm" onclick="closeAmbiguityModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- REMEDIAL DRILL MODAL -->
   <div id="remedialModal" class="modal-backdrop hidden">
     <div class="modal-box card">

@@ -41,7 +41,7 @@ def detect_topic_metadata(topic_title: str, articles: List[Dict[str, str]] = Non
 
     if any(k in combined for k in ["french leader", "napoleon", "gothic cathedral", "vaulting", "revolution"]):
         return "🏛️", "History & Architectural Heritage", "history"
-    elif any(k in combined for k in ["french verb", "conjugation", "grammar", "phonology", "linguistic", "particle"]):
+    elif any(k in combined for k in ["french verb", "conjugation", "grammar", "phonology", "linguistic", "grammatical particle"]):
         return "🗣️", "Linguistics & Language Studies", "linguistics"
     elif any(k in combined for k in ["copyright", "constitution", "geneva convention", "war crime", "immunity", "jurisprudence", "legal"]):
         return "⚖️", "Legal Systems & Jurisprudence", "law"
@@ -61,7 +61,7 @@ def detect_topic_metadata(topic_title: str, articles: List[Dict[str, str]] = Non
         return "🧪", "Chemistry & Biochemistry", "chemistry"
     elif any(k in combined for k in ["bacterial conjugation", "plasmid", "mendel", "genetics", "nitrogen cycle", "ecology", "biodiversity"]):
         return "🧬", "Biological & Environmental Sciences", "biology"
-    elif any(k in combined for k in ["dislocation slip", "crystal lattice", "rotational inertia", "angular momentum", "fluid", "mechanics"]):
+    elif any(k in combined for k in ["quantum", "chromodynamics", "quark", "gluon", "hadron", "subatomic", "dislocation slip", "crystal lattice", "rotational inertia", "angular momentum", "fluid", "mechanics", "physics"]):
         return "⚡", "Physics & Materials Science", "physics"
     elif any(k in combined for k in ["plate tectonics", "earthquake", "geography"]):
         return "🌍", "Earth & Planetary Sciences", "earth"
@@ -504,8 +504,8 @@ def synthesize_universal_questions(
     facts = brief.get("sample_facts", [])
 
     # Distribution: ~50% basic, ~33% conceptual, ~17% application
-    nb = max(2, int(num_questions * 0.50))
-    nc = max(2, int(num_questions * 0.33))
+    nb = max(2, int(round(num_questions * 0.50)))
+    nc = max(2, int(round(num_questions * 0.3333)))
     na = max(1, num_questions - nb - nc)
     tier_plan = ["basic"] * nb + ["conceptual"] * nc + ["application"] * na
 
@@ -656,9 +656,9 @@ def generate_question_item(
             text = f"Which formal prerequisite or baseline property is indispensable for understanding '{c_name}' in {topic}?"
             opts = {
                 "A": f"Verifying the essential baseline properties and prerequisite criteria that anchor '{c_name}' within {topic}.",
-                "B": f"Assuming that operational outcomes can be evaluated without any baseline criteria in {topic}.",
-                "C": f"Conflating theoretical definitions with isolated practical deviations.",
-                "D": f"Ignoring governing constraints and treating all variables as interchangeable in {topic}."
+                "B": f"Assuming that operational outcomes can be evaluated without establishing any baseline criteria in {topic}.",
+                "C": f"Conflating theoretical definitions with isolated practical deviations when evaluating '{c_name}' in {topic}.",
+                "D": f"Ignoring governing constraints and treating all variables as interchangeable when evaluating '{c_name}' in {topic}."
             }
 
         return {

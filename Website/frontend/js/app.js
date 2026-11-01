@@ -873,6 +873,114 @@ async function renderRecommendationsList(recs) {
   }).join("");
 }
 
+// Ambiguity Resolution Modal Controller
+let pendingAmbiguityTopic = "";
+let pendingAmbiguitySyllabus = "";
+
+function openAmbiguityModal(ambiguities, topicTitle, syllabusText) {
+  pendingAmbiguityTopic = topicTitle;
+  pendingAmbiguitySyllabus = syllabusText;
+
+  const modal = document.getElementById("ambiguityModal");
+  const listEl = document.getElementById("ambiguityOptionsList");
+  if (!modal || !listEl) return;
+
+  listEl.innerHTML = ambiguities.map(cand => `
+    <div onclick="selectAmbiguityOption('${cand.id}')" style="cursor: pointer; padding: 1rem 1.15rem; background: rgba(15, 23, 42, 0.7); border: 1.5px solid #334155; border-radius: 12px; transition: all 0.2s;" onmouseover="this.style.borderColor='#6366f1'; this.style.background='rgba(99, 102, 241, 0.15)';" onmouseout="this.style.borderColor='#334155'; this.style.background='rgba(15, 23, 42, 0.7)';">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+        <strong style="color: #f8fafc; font-size: 1rem;">${cand.title}</strong>
+        <span class="badge-tag" style="background: rgba(99, 102, 241, 0.25); color: #c7d2fe; font-size: 0.75rem; padding: 2px 7px; border-radius: 4px;">${cand.discipline}</span>
+      </div>
+      <p style="margin: 0; font-size: 0.85rem; color: #94a3b8; line-height: 1.4;">${cand.scope}</p>
+    </div>
+  `).join("");
+
+  modal.classList.remove("hidden");
+  modal.style.display = "flex";
+}
+
+function closeAmbiguityModal() {
+  const modal = document.getElementById("ambiguityModal");
+  if (modal) {
+    modal.classList.add("hidden");
+    modal.style.display = "none";
+  }
+}
+
+async function selectAmbiguityOption(candId) {
+  closeAmbiguityModal();
+  const title = pendingAmbiguityTopic;
+  const text = pendingAmbiguitySyllabus;
+  const btn = document.getElementById("generateSyllabusBtn");
+  const btnText = document.getElementById("generateBtnText");
+  const statusBanner = document.getElementById("customGenStatusBanner");
+
+  if (btn) btn.disabled = true;
+  if (btnText) btnText.textContent = "Synthesizing Disambiguated Assessment...";
+  if (statusBanner) {
+    statusBanner.style.display = "block";
+    statusBanner.style.background = "rgba(99, 102, 241, 0.15)";
+    statusBanner.style.border = "1px solid #6366f1";
+    statusBanner.style.color = "#c7d2fe";
+    statusBanner.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span class="spinner" style="display: inline-block; width: 18px; height: 18px; border: 2px solid #6366f1; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></span>
+        <span>Synthesizing tailored assessment for chosen scope...</span>
+      </div>
+    `;
+  }
+
+  try {
+    const apiKey = localStorage.getItem("deeplearnx_ai_api_key") || document.getElementById("aiApiKeyInput")?.value?.trim() || null;
+    const apiProvider = localStorage.getItem("deeplearnx_ai_provider") || document.getElementById("aiProviderSelect")?.value || "gemini";
+    const userId = window.currentUser ? window.currentUser.id : null;
+
+    const result = await API.customGenerateAssessment(title, text, userId, 12, apiKey, apiProvider, null, candId);
+
+    if (statusBanner) {
+      statusBanner.style.background = "rgba(16, 185, 129, 0.15)";
+      statusBanner.style.border = "1px solid #10b981";
+      statusBanner.style.color = "#6ee7b7";
+      statusBanner.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+          <div>
+            <strong>✨ Successfully Generated!</strong>
+            <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: #cbd5e1;">
+              Created <strong>${result.concepts_count} concepts</strong>, <strong>${result.questions_count} diagnostic questions</strong>, and registered prerequisite DAG for <strong>${result.name}</strong>.
+            </p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="startAssessmentFlow('${result.domain_id}')" style="background: #10b981; border-color: #10b981;">
+            Launch Assessment Now &rarr;
+          </button>
+        </div>
+      `;
+    }
+
+    window.customDomains[result.domain_id] = result;
+    const domainSelect = document.getElementById("domainSelect");
+    if (domainSelect) {
+      const optExists = Array.from(domainSelect.options).some(o => o.value === result.domain_id);
+      if (!optExists) {
+        const newOpt = document.createElement("option");
+        newOpt.value = result.domain_id;
+        newOpt.textContent = `${result.icon || '✨'} ${result.name}`;
+        domainSelect.appendChild(newOpt);
+      }
+      domainSelect.value = result.domain_id;
+    }
+  } catch (err) {
+    if (statusBanner) {
+      statusBanner.style.background = "rgba(239, 68, 68, 0.15)";
+      statusBanner.style.border = "1px solid #ef4444";
+      statusBanner.style.color = "#fca5a5";
+      statusBanner.innerHTML = `<strong>Error generating assessment:</strong> ${err.message}`;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+    if (btnText) btnText.textContent = "Generate Custom Question Bank & DAG";
+  }
+}
+
 // Remedial Modal Drill
 async function openRemedialModal(conceptId, domainId) {
   const activeDomain = domainId || window.currentDomain || "pokemon";
@@ -966,8 +1074,17 @@ async function submitRemedialDrill() {
     resultBox.innerHTML = `
       <div class="alert-box ${res.passed ? "alert-emerald badge-emerald" : "alert-amber"} p-4 text-center">
         <h2>${res.passed ? "Remedial Drill Passed!" : "Revision Recommended"}</h2>
-        <div class="stat-value my-2">${res.accuracy}% Score</div>
+        <div class="stat-value my-2">${res.accuracy}% Score (${res.score}/${res.total_questions})</div>
         <p>${res.message}</p>
+        ${res.normalized_learning_gain !== undefined ? `
+          <div class="flex-center gap-4 my-3 text-xs" style="background: rgba(0,0,0,0.05); padding: 8px 12px; border-radius: 8px; display: inline-flex;">
+            <span>Pre-Test: <strong>${res.pre_accuracy}%</strong></span>
+            <span>&rarr;</span>
+            <span>Post-Test: <strong>${res.post_accuracy}%</strong></span>
+            <span>&bull;</span>
+            <span>Hake's Gain: <strong class="${res.normalized_learning_gain > 0.3 ? 'text-emerald' : ''}">${res.normalized_learning_gain > 0 ? '+' : ''}${res.normalized_learning_gain}</strong></span>
+          </div>
+        ` : ''}
         <div class="mt-4">
           <button class="btn btn-primary" onclick="closeRemedialModal(); navigate('graph-map');">
             View Updated Concept Dependency Map &rarr;
@@ -1252,6 +1369,12 @@ async function handleCustomSyllabusSubmit(event) {
     }
 
     if (stageTimer) clearInterval(stageTimer);
+
+    if (result && result.status === "ambiguous") {
+      openAmbiguityModal(result.ambiguities, topicTitle, syllabusText);
+      if (statusBanner) statusBanner.style.display = "none";
+      return;
+    }
 
     // Success UI
     if (statusBanner) {

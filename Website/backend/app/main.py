@@ -109,6 +109,14 @@ class CustomGenerateRequest(BaseModel):
     require_live_llm: Optional[bool] = False
     dag_type: Optional[str] = None
     seed_offset: Optional[int] = 0
+    selected_disambiguation: Optional[str] = None
+
+
+class TopicInterpretRequest(BaseModel):
+    topic_title: Optional[str] = None
+    topic: Optional[str] = None
+    syllabus_text: Optional[str] = ""
+    selected_disambiguation: Optional[str] = None
 
 # ----------------- AUTH ENDPOINTS -----------------
 
@@ -569,6 +577,53 @@ def get_provider_status():
             from backend.app.syllabus_generator import check_provider_status
     return check_provider_status()
 
+@app.post("/api/assessment/topic-interpret")
+def interpret_topic_endpoint(req: TopicInterpretRequest):
+    """
+    Interprets student topic scope, discipline, learning objectives, and detects ambiguities.
+    """
+    raw_topic = (req.topic_title or req.topic or "").strip()
+    if not raw_topic:
+        raise HTTPException(status_code=400, detail="Topic title is required")
+    try:
+        from topic_understanding import TopicUnderstandingEngine
+    except ImportError:
+        try:
+            from app.topic_understanding import TopicUnderstandingEngine
+        except ImportError:
+            try:
+                from backend.app.topic_understanding import TopicUnderstandingEngine
+            except ImportError:
+                from Website.backend.app.topic_understanding import TopicUnderstandingEngine
+    engine = TopicUnderstandingEngine()
+    interp = engine.interpret(
+        topic=raw_topic,
+        syllabus_text=req.syllabus_text or "",
+        selected_disambiguation=req.selected_disambiguation
+    )
+    return interp.to_dict()
+
+
+@app.get("/api/assessment/topic-interpret")
+def interpret_topic_get_endpoint(topic: str = Query(...), syllabus_text: str = Query("")):
+    """GET endpoint to inspect academic topic interpretation and ambiguity options."""
+    if not topic or not topic.strip():
+        raise HTTPException(status_code=400, detail="Topic is required")
+    try:
+        from topic_understanding import TopicUnderstandingEngine
+    except ImportError:
+        try:
+            from app.topic_understanding import TopicUnderstandingEngine
+        except ImportError:
+            try:
+                from backend.app.topic_understanding import TopicUnderstandingEngine
+            except ImportError:
+                from Website.backend.app.topic_understanding import TopicUnderstandingEngine
+    engine = TopicUnderstandingEngine()
+    interp = engine.interpret(topic=topic.strip(), syllabus_text=syllabus_text)
+    return interp.to_dict()
+
+
 @app.post("/api/assessment/custom-generate")
 def custom_generate_assessment(req: CustomGenerateRequest):
     """
@@ -581,7 +636,36 @@ def custom_generate_assessment(req: CustomGenerateRequest):
     """
     if not req.topic_title or not req.topic_title.strip():
         raise HTTPException(status_code=400, detail="Topic title is required")
-        
+
+    # Ambiguity check: if user entered an ambiguous term without selecting disambiguation or providing specific context
+    if not req.selected_disambiguation:
+        try:
+            try:
+                from topic_understanding import TopicUnderstandingEngine
+            except ImportError:
+                try:
+                    from app.topic_understanding import TopicUnderstandingEngine
+                except ImportError:
+                    try:
+                        from backend.app.topic_understanding import TopicUnderstandingEngine
+                    except ImportError:
+                        from Website.backend.app.topic_understanding import TopicUnderstandingEngine
+            _t_engine = TopicUnderstandingEngine()
+            _interp = _t_engine.interpret(
+                topic=req.topic_title.strip(),
+                syllabus_text=req.syllabus_text or ""
+            )
+            if _interp.is_ambiguous:
+                return {
+                    "status": "ambiguous",
+                    "is_ambiguous": True,
+                    "canonical_title": _interp.canonical_title,
+                    "ambiguities": _interp.ambiguities,
+                    "message": f"'{_interp.canonical_title}' has multiple academic interpretations. Please select your intended scope."
+                }
+        except Exception as e:
+            logger.warning(f"Topic interpretation pre-check error: {e}")
+
     try:
         result = syllabus_engine.generate_custom_domain(
             topic_title=req.topic_title.strip(),
@@ -593,7 +677,8 @@ def custom_generate_assessment(req: CustomGenerateRequest):
             model_name=req.model_name,
             require_live_llm=bool(req.require_live_llm),
             dag_type=req.dag_type,
-            seed_offset=req.seed_offset or 0
+            seed_offset=req.seed_offset or 0,
+            selected_disambiguation=req.selected_disambiguation
         )
         return result
     except ValueError as ve:
@@ -1094,16 +1179,31 @@ def submit_remedial(sub: RemedialSubmission):
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (remedial_id, sub.user_id, sub.domain_id, sub.original_session_id, sub.target_concept_id, score, total, updated_status))
     
+    # Fetch pre-test accuracy from original session for authentic normalized learning gain
+    orig_session = cursor.execute(
+        "SELECT accuracy, score, total_questions, concept_mastery_map FROM assessment_sessions WHERE id = ?",
+        (sub.original_session_id,)
+    ).fetchone()
+    pre_acc_pct = float(orig_session["accuracy"]) if orig_session else 0.0
+    pre_acc = pre_acc_pct / 100.0
+    post_acc = (score / total) if total > 0 else 0.0
+    post_acc_pct = post_acc * 100.0
+
+    # Authentic Hake's normalized learning gain: (Post - Pre) / (1 - Pre)
+    if pre_acc >= 1.0:
+        normalized_gain = 1.0 if post_acc >= 1.0 else 0.0
+    else:
+        raw_gain = (post_acc - pre_acc) / (1.0 - pre_acc)
+        normalized_gain = round(max(-1.0, min(1.0, raw_gain)), 3)
+
     # If passed, update the original session's concept_mastery_map so the graph map turns GREEN!
-    if passed:
-        orig = cursor.execute("SELECT concept_mastery_map FROM assessment_sessions WHERE id = ?", (sub.original_session_id,)).fetchone()
-        if orig:
-            c_map = json.loads(orig["concept_mastery_map"] or "{}")
-            c_map[sub.target_concept_id] = "mastered"
-            cursor.execute(
-                "UPDATE assessment_sessions SET concept_mastery_map = ? WHERE id = ?",
-                (json.dumps(c_map), sub.original_session_id)
-            )
+    if passed and orig_session:
+        c_map = json.loads(orig_session["concept_mastery_map"] or "{}")
+        c_map[sub.target_concept_id] = "mastered"
+        cursor.execute(
+            "UPDATE assessment_sessions SET concept_mastery_map = ? WHERE id = ?",
+            (json.dumps(c_map), sub.original_session_id)
+        )
             
     conn.commit()
     conn.close()
@@ -1113,6 +1213,9 @@ def submit_remedial(sub: RemedialSubmission):
         "score": score,
         "total_questions": total,
         "accuracy": round(pct, 1),
+        "pre_accuracy": round(pre_acc_pct, 1),
+        "post_accuracy": round(post_acc_pct, 1),
+        "normalized_learning_gain": normalized_gain,
         "passed": passed,
         "updated_mastery_status": updated_status,
         "message": "Concept successfully remediated! Your knowledge gap map has been updated." if passed else "Please review the foundation notes and try again."
