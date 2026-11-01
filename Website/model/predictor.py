@@ -376,7 +376,7 @@ class DeepLearnXPredictor:
             predicted_state = "False Mastery"
             pred_class_idx = 1
             gaming_reason = f"Heads up! It looks like you chose the longest answer in {round(hbi * 100)}% of questions. The longest choice isn't always the right one—take your time to read each question carefully!"
-        elif rgb >= 0.50 and hbi >= 0.40 and acc_overall >= 0.65:
+        elif rgb >= 0.50 and (has_probe_failures or hbi >= 0.40) and acc_overall >= 0.65:
             is_gaming_detected = True
             predicted_state = "False Mastery"
             pred_class_idx = 1

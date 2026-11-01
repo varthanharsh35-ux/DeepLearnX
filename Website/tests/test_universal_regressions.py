@@ -634,7 +634,7 @@ def test_group_b_new_model_generalization_25_scenarios():
             "name": "False Mastery (Fast Guessing with Probe Failure)",
             "sim_func": lambda qs: [
                 {"question_id": q.get("question_id") or q.get("id"), "q_info": q, "selected_option": q["correct_option"], "response_time": 6.5, "confidence": 5, 
-                 "reasoning_selected": "D" if q.get("reasoning_probe") else None}
+                 "reasoning_selected": ("B" if str(q.get("reasoning_probe", {}).get("correct_probe", "A")).upper() != "B" else "A") if q.get("reasoning_probe") else None}
                 for q in qs
             ],
             "expected_state": "False Mastery"
