@@ -41,3 +41,6 @@ scratch_*.json
 *.db
 Website/database/*.db
 
+# Scratch directory
+scratch/
+

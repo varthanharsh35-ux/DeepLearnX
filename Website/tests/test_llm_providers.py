@@ -148,6 +148,78 @@ class TestGeminiProviderMocked(unittest.TestCase):
         # Ensure authentication error is NOT retried
         self.assertEqual(mock_client.models.generate_content.call_count, 1)
 
+    @patch("backend.app.providers.gemini_provider.GENAI_AVAILABLE", True)
+    @patch("backend.app.providers.gemini_provider.genai")
+    def test_gemini_timeout_error(self, mock_genai):
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        self.provider._client = mock_client
+        mock_client.models.generate_content.side_effect = TimeoutError("Request timed out")
+
+        with self.assertRaises(LLMTimeoutError):
+            self.provider.generate_structured(schema={}, prompt="Timeout test")
+
+    @patch("backend.app.providers.gemini_provider.GENAI_AVAILABLE", True)
+    @patch("backend.app.providers.gemini_provider.genai")
+    def test_gemini_quota_exhausted_error(self, mock_genai):
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        self.provider._client = mock_client
+
+        from google.genai import errors
+        api_err = errors.APIError(code=429, response_json={"error": {"message": "Resource exhausted: quota limit exceeded"}}, response=MagicMock())
+        mock_client.models.generate_content.side_effect = api_err
+
+        with self.assertRaises(LLMQuotaExhaustedError):
+            self.provider.generate_structured(schema={}, prompt="Quota test")
+
+    @patch("backend.app.providers.gemini_provider.GENAI_AVAILABLE", True)
+    @patch("backend.app.providers.gemini_provider.genai")
+    def test_gemini_malformed_json_format_error(self, mock_genai):
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        self.provider._client = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = "invalid json {broken"
+        mock_response.candidates = [MagicMock(finish_reason="STOP")]
+        mock_client.models.generate_content.return_value = mock_response
+
+        with self.assertRaises(LLMFormatError):
+            self.provider.generate_structured(schema={}, prompt="JSON test")
+
+    @patch("backend.app.providers.gemini_provider.GENAI_AVAILABLE", True)
+    @patch("backend.app.providers.gemini_provider.genai")
+    def test_gemini_truncation_error(self, mock_genai):
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        self.provider._client = mock_client
+
+        mock_response = MagicMock()
+        mock_response.text = '{"partial": "data'
+        mock_response.candidates = [MagicMock(finish_reason="MAX_TOKENS")]
+        mock_client.models.generate_content.return_value = mock_response
+
+        with self.assertRaises(LLMTruncationError):
+            self.provider.generate_structured(schema={}, prompt="Truncation test")
+
+    @patch("backend.app.providers.gemini_provider.GENAI_AVAILABLE", True)
+    @patch("backend.app.providers.gemini_provider.genai")
+    def test_gemini_retry_exhaustion(self, mock_genai):
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        self.provider._client = mock_client
+
+        from google.genai import errors
+        api_err = errors.APIError(code=429, response_json={"error": {"message": "Rate limit exceeded"}}, response=MagicMock())
+        mock_client.models.generate_content.side_effect = api_err
+
+        with patch("time.sleep", return_value=None):
+            with self.assertRaises(LLMRateLimitError):
+                self.provider.generate_structured(schema={}, prompt="Retry test")
+        # max_retries = 2 -> total attempts = 1 initial + 2 retries = 3
+        self.assertEqual(mock_client.models.generate_content.call_count, 3)
+
 
 class TestOpenAIProviderMocked(unittest.TestCase):
     """Verifies OpenAIProvider under mocked network conditions."""
@@ -714,6 +786,37 @@ class TestEndToEndPipelineWithProviderSpy(unittest.TestCase):
         interp_quad = engine.interpret("Quadratic Equations")
         self.assertFalse(interp_quad.is_ambiguous)
         self.assertEqual(len(interp_quad.ambiguities), 0)
+
+    def test_unknown_homonym_contextual_interpretation_without_hardcoded_mappings(self):
+        """Verifies genuine contextual interpretation for unknown homonyms (Bank, Terminal, Scale, Pitch, Bass)."""
+        from backend.app.topic_understanding import TopicUnderstandingEngine
+        engine = TopicUnderstandingEngine()
+
+        test_cases = [
+            ("Bank in financial economics", "", "Economics & Business"),
+            ("Bank in river geography", "", "Earth & Geological Sciences"),
+            ("Bank", "financial economics monetary central reserve interest rate credit banking", "Economics & Business"),
+            ("Bank", "river hydrology sediment fluvial geomorphology water flow floodplain", "Earth & Geological Sciences"),
+            ("Terminal in computer systems", "", "Computer Science & Systems"),
+            ("Terminal in transport infrastructure", "", "Transportation & Logistics"),
+            ("Terminal", "command line unix bash shell process stdin stdout console terminal", "Computer Science & Systems"),
+            ("Terminal", "airport passenger gate departure runway logistics transport terminal", "Transportation & Logistics"),
+            ("Scale in music", "", "Music Theory & Fine Arts"),
+            ("Scale in biology or measurement", "", "Cellular & Molecular Biology"),
+            ("Scale", "major minor pentatonic intervals tonic octave harmony music pitch", "Music Theory & Fine Arts"),
+            ("Scale", "reptile keratin epidermal fish cuticle dermis morphology scales", "Cellular & Molecular Biology"),
+            ("Pitch in acoustics", "", "Acoustics & Sound Physics"),
+            ("Pitch in baseball athletics", "", "Sports Science & Athletics"),
+            ("Bass in music theory", "", "Music Theory & Fine Arts"),
+            ("Bass in freshwater fish biology", "", "Zoology & Animal Biology"),
+        ]
+
+        for topic, context, expected_domain in test_cases:
+            interp = engine.interpret(topic, syllabus_text=context)
+            match = (expected_domain.lower() in interp.discipline.lower() or 
+                     expected_domain.lower() in interp.category.lower())
+            self.assertTrue(match, f"Failed for '{topic}': got discipline '{interp.discipline}' / category '{interp.category}', expected '{expected_domain}'")
+            self.assertFalse(interp.is_ambiguous, f"Expected unambiguous contextual resolution for '{topic}'")
 
     def test_provider_failover_telemetry_and_bounded_retry(self):
         """Verifies failover records provider switch event and auth errors abort immediately without retries."""

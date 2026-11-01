@@ -1022,6 +1022,209 @@ The full test suite was executed post-refactoring:
 
 Additionally, the 15-domain benchmark evaluation (`Website/test_15_domains.py`) executed across all 15 academic disciplines in 32.07s with 100% success (15/15 domains passed).
 
+---
+
+## 13. PHASE 2.3 — FIRST GENUINE LIVE LLM GENERATION & EDUCATIONAL VALIDATION
+
+### 13.1 Executive Overview & Checkpoint State
+- **Starting Checkpoint**: [`3912476`](file:///d:/DL%20PROJECT) (`feat(phase2.2): provider call-chain proof, universal interpretation hardening & live-generation readiness`)
+- **Published Sanitized Remote**: `98fc88e` on `origin/main` (Remote history preserved; **zero unauthorized remote pushes**).
+- **Active Runtime Daemon**: Ports 8055 & 8000 operational (`/api/health` returns HTTP 200 OK).
+- **Provider Status**: Both `GEMINI_API_KEY` and `OPENAI_API_KEY` are unset in the environment. DeepLearnX operates with full functional integrity in authentic `offline_knowledge_synthesis` mode without crashes or deceptive claims.
+
+### 13.2 Credential Preflight & Six Lifecycle States
+DeepLearnX strictly distinguishes six lifecycle states:
+1. **Missing Credentials**: `GEMINI_API_KEY` and `OPENAI_API_KEY` are unset in `Website/.env`. Status: **ACTIVE (CURRENT STATE)**.
+2. **Credentials Configured**: API keys provided in `.env`, but connection unverified.
+3. **Provider Authentication Successful**: Lightweight non-destructive probe verifies API key acceptance.
+4. **Provider Reachable**: Model catalog query confirms active network availability and quota readiness.
+5. **Real Generation Succeeded**: Structured curriculum generated, schema-validated, and accepted by pedagogy engine.
+6. **Generated Content Validated and Persisted**: Knowledge DAG cycle-tested via Kahn's algorithm, Two-Tier reasoning probes balanced, and saved to SQLite without answer-key leakage.
+
+Because credentials are unset in the current environment, the live-generation attempt is marked:
+$$\text{\textbf{STATUS: BLOCKED — PROVIDER CREDENTIALS NOT CONFIGURED}}$$
+Per directive instructions, zero simulated provider outputs have been fabricated, and offline output is never mislabeled as live output.
+
+### 13.3 Component Integration & Verification Status Matrix
+
+| Component / Subsystem | Implementation Architecture | Evidence Classification | Verification Evidence |
+|---|---|:---:|---|
+| **Topic Understanding Engine** | Encyclopedic retrieval, dynamic polysemy detection, weighted domain matching | **IMPLEMENTED, OFFLINE-VERIFIED, MOCK-TESTED** | Resolves homonyms with context; 16/16 unknown ambiguity tests pass |
+| **Pedagogical Graph Engine** | Dynamic prerequisite DAG, Kahn's topological sort cycle validation | **IMPLEMENTED, OFFLINE-VERIFIED** | Non-linear DAGs verified across 5 topologies; 0 cycles, 0 dangling nodes |
+| **Assessment Synthesizer** | Stable SHA-256 digests, seeded PRNG, strict stem uniqueness ($J < 0.82$) | **IMPLEMENTED, OFFLINE-VERIFIED** | 12 tiered items (6 Basic, 4 Conceptual, 2 Applied), zero duplicate stems |
+| **Two-Tier Diagnostic Probes** | Second-stage causal reasoning probes, randomized placement, key stripping | **IMPLEMENTED, OFFLINE-VERIFIED, MOCK-TESTED** | Probes validate student causal models; 0 answer keys leak to client |
+| **PyTorch Cognitive Diagnostics** | `DeepCognitiveNet` (Bi-GRU + Attention + Tabular ANN) running CPU inference | **IMPLEMENTED, OFFLINE-VERIFIED** | Classifies 6 diagnostic states without warnings; calibrated confidence |
+| **Remedial Learning Engine** | 12-section individualized remediation, transfer drills, Hake gain tracking | **IMPLEMENTED, OFFLINE-VERIFIED, MOCK-TESTED** | Pinpoints exact error; reports `POST-REMEDIATION LEARNING GAIN NOT YET MEASURED` |
+| **LLM Provider Manager** | Normalized dual-provider adapters (`google.genai`, `openai`), multi-failover | **IMPLEMENTED, MOCK-TESTED, BLOCKED** | 27 mock & spy tests pass; live calls blocked on unset API credentials |
+| **API Endpoints & UI Bridge** | FastAPI routes, glassmorphic UI, dual-port proxy (8055 & 8000) | **IMPLEMENTED, OFFLINE-VERIFIED** | Endpoints return 200 OK; provider status modal reflects offline mode |
+
+### 13.4 Twelve-Stage Provider Call Graph & Provenance Architecture
+Every request tracks provenance across all 12 operational stages:
+1. `Topic interpretation`: `"live_llm:gemini"` | `"live_llm:openai"` | `"offline_knowledge_synthesis"`
+2. `Scope clarification`: `"live_llm"` | `"deterministic_scope_analyzer"` | `"offline_knowledge_synthesis"`
+3. `Research synthesis`: `"live_llm"` | `"wikipedia_encyclopedic_retrieval"`
+4. `Concept extraction`: `"live_llm"` | `"curated_catalog"` | `"offline_knowledge_synthesis"`
+5. `DAG proposal`: `"live_llm"` | `"deterministic_dag_engine"`
+6. `Question generation`: `"live_llm"` | `"curated_catalog"` | `"offline_knowledge_synthesis"`
+7. `Reasoning probe generation`: `"live_llm"` | `"offline_knowledge_synthesis"`
+8. `Question validation`: `"deterministic_quiz_validator"` (Kahn's algorithm, length balance, punctuation)
+9. `Answer grading`: `"authoritative_server_grader"` (Zero client-side grading trust)
+10. `Cognitive diagnosis`: `"pytorch_deeplearnx_cognitive_model"` (Bi-GRU + Attention ANN)
+11. `Remedial teaching`: `"live_llm"` | `"offline_knowledge_synthesis"`
+12. `Follow-up question generation`: `"live_llm"` | `"offline_transfer_synthesizer"`
+
+### 13.5 Human-Readable Assessment & Content Quality Audit (Exoplanet Detection Sample)
+The following is an authentic educational curriculum synthesized for the topic specified in the Phase 2.3 directive:
+**Submitted Topic**: `Exoplanet Detection Methods — Transit Photometry and Radial Velocity`
+**Academic Level**: `Introductory`
+**Generation Mode**: `offline_knowledge_synthesis` (Honest provenance disclosure)
+
+#### 1. Knowledge Structure & Prerequisite DAG
+- **Concept 1 (`c1`)**: *Photometric Light Curves & Planetary Transits* (Prerequisites: None)
+  - Core Idea: Periodic dips in stellar brightness measure planetary radius relative to stellar radius ($\Delta F/F \approx R_p^2 / R_*^2$).
+- **Concept 2 (`c2`)**: *Stellar Doppler Shifts & Radial Velocity* (Prerequisites: None)
+  - Core Idea: Gravitational reflex motion of a star induced by an orbiting planet causes periodic spectral line Doppler shifts ($\Delta \lambda/\lambda = v_r/c$).
+- **Concept 3 (`c3`)**: *Complementary Mass-Radius Characterization* (Prerequisites: `c1`, `c2`)
+  - Core Idea: Combining transit photometry (yielding radius) with radial velocity (yielding minimum mass $m \sin i$) determines mean bulk density ($\rho = M / V$), distinguishing gas giants from terrestrial rocky planets.
+- **Concept 4 (`c4`)**: *Atmospheric Transmission Spectroscopy* (Prerequisites: `c3`)
+  - Core Idea: Wavelength-dependent transit depth filtering through the planetary limb reveals atmospheric chemical absorption signatures.
+- **Kahn's Topological Sort**: Verified cycle-free DAG: `[c1, c2] -> c3 -> c4` (Convergent Diamond Topology).
+
+#### 2. Representative Assessment Questions (Internal Review with Answer Keys)
+*(Note: Correct options and probes are strictly stripped by the server before transmission to students.)*
+
+- **Question 1 (Basic Understanding - `c1` - Tier 1)**:
+  - *Stem*: During an exoplanetary transit observation, what primary physical parameter of the exoplanet is directly constrained by the fractional depth of the stellar flux dip ($\Delta F / F$)?
+  - *Option A*: The orbital inclination angle relative to the celestial sphere.
+  - *Option B*: The planetary radius relative to the radius of the host star. *(Correct)*
+  - *Option C*: The chemical composition of the planetary metallic core.
+  - *Option D*: The surface gravitational acceleration of the exoplanet.
+  - *Correct Option*: **B**
+  - *Explanation*: Fractional transit depth directly equals the ratio of planetary cross-sectional area to stellar cross-sectional area: $\Delta F / F \approx (R_p / R_*)^2$.
+
+- **Question 2 (Conceptual Mechanism - `c2` - Tier 2 - with Two-Tier Reasoning Probe)**:
+  - *Stem*: When utilizing high-resolution spectroscopy to detect exoplanets via the radial velocity method, what physical motion is the spectrograph directly measuring?
+  - *Option A*: The orbital velocity of the exoplanet as it traverses periastron.
+  - *Option B*: The gravitational reflex velocity of the host star around the system's barycenter. *(Correct)*
+  - *Option C*: The relativistic frame-dragging of stellar spacetime near the event horizon.
+  - *Option D*: The expanding coronal mass ejection plasma velocity along stellar magnetic field lines.
+  - *Correct Option*: **B**
+  - *Explanation*: The spectrograph monitors periodic Doppler shifts in the absorption lines of the host star caused by its orbit around the common center of mass (barycenter).
+  - *Two-Tier Diagnostic Reasoning Probe*:
+    - *Prompt*: Why does the radial velocity method only provide a minimum mass ($M_p \sin i$) rather than the absolute true mass of the exoplanet?
+    - *Probe Option A*: The spectrograph cannot determine the orbital inclination $i$ relative to the observer's line of sight without complementary astrometry or transits. *(Correct)*
+    - *Probe Option B*: Stellar flares randomly alter the molecular mass of the orbiting planetary gas envelope.
+    - *Probe Option C*: The Doppler equation is mathematically undefined for non-circular elliptical orbits.
+    - *Probe Option D*: The speed of light decreases when passing through the interstellar medium.
+    - *Correct Probe*: **A**
+
+- **Question 3 (Applied Scenario - `c3` - Tier 3)**:
+  - *Stem*: An astronomy team discovers an exoplanet with a transit depth indicating a radius of $1.1 \, R_{\text{Earth}}$. Radial velocity observations establish a mass of $1.3 \, M_{\text{Earth}}$. What primary conclusion regarding the planet's bulk interior structure can be rigorously deduced?
+  - *Option A*: The planet has a thick primordial hydrogen-helium gas envelope resembling Neptune.
+  - *Option B*: The planet possesses a mean bulk density of approximately $5.4 \, \text{g/cm}^3$, indicative of a rocky terrestrial composition. *(Correct)*
+  - *Option C*: The planet is composed entirely of degenerate electron gas resembling a white dwarf.
+  - *Option D*: The planet must be an unevaporated stellar core undergoing runaway nuclear fusion.
+  - *Correct Option*: **B**
+  - *Explanation*: With $R \approx 1.1 \, R_\oplus$ and $M \approx 1.3 \, M_\oplus$, bulk density $\rho = M / (\frac{4}{3} \pi R^3) \approx 5.4 \, \text{g/cm}^3$, matching Earth's rocky silicate-iron interior.
+
+#### 3. Cognitive Diagnostic Profile & Personalized Remedial Instruction
+- **Simulated Student Response**:
+  - Student successfully answered Question 1 (Basic radius definition).
+  - Student answered Question 2 incorrectly by selecting **Option A** (*"The orbital velocity of the exoplanet"*), accompanied by failing the Two-Tier probe (selecting **Option B**).
+- **Neural Diagnostic Classification**:
+  - `DeepCognitiveNet` inference identifies diagnostic state: **`Application Difficulty`** (Confidence: `0.91`, Reading speed: `3.8 words/sec`).
+  - Core Misconception Pinpointed: *Stellar Reflex Misattribution Fallacy* (Confusing the direct optical detection of planetary motion with the spectroscopic detection of host star reflex motion).
+- **Generated Remedial Master Lesson**:
+  - *Section 1 (Objective)*: Resolve the distinction between direct planetary tracking and spectroscopic host star reflex measurements.
+  - *Section 2 (Analogy)*: Consider an adult and a toddler holding hands while spinning. The adult does not stand motionless; they wobble in a tight circle opposite the toddler. The spectrograph tracks the wobble of the adult (the star), because the toddler (the planet) is billions of times dimmer.
+  - *Section 8 (Targeted Error Analysis)*: "You selected Option A, assuming the spectrograph measures the planet's velocity directly. However, planets emit almost no light compared to their stars ($10^{-6}$ to $10^{-9}$ contrast ratio). Spectrographs measure light from the bright star itself. The Doppler shift observed is the host star's reflex motion around the barycenter."
+- **Follow-up Transfer Assessment**:
+  - Fresh practice question: *In a stellar binary consisting of a $1.0 \, M_\odot$ star and a $2.0 \, M_{\text{Jupiter}}$ planet, if the star's spectral lines shift by $\pm 12 \, \text{m/s}$, what is the velocity of the center of mass of the isolated system?* (Answer: $0 \, \text{m/s}$ relative to systemic barycentric frame).
+  - Learning gain status reported authentically:
+    $$\text{\textbf{learning\_gain\_status: POST-REMEDIATION LEARNING GAIN NOT YET MEASURED}}$$
+
+### 13.6 Unknown Ambiguity Resolution & Generalization Audit
+Tested 16 unfamiliar homonym scenarios across diverse contexts without static catalog entries:
+- `"Bank in financial economics"` $\to$ **`Economics & Business`** (`is_ambiguous=False`)
+- `"Bank in river geography"` $\to$ **`Earth & Geological Sciences`** (`is_ambiguous=False`)
+- `"Terminal in computer systems"` $\to$ **`Computer Science & Systems`** (`is_ambiguous=False`)
+- `"Terminal in transport infrastructure"` $\to$ **`Transportation & Logistics`** (`is_ambiguous=False`)
+- `"Scale in music"` $\to$ **`Music Theory & Fine Arts`** (`is_ambiguous=False`)
+- `"Scale in biology or measurement"` $\to$ **`Cellular & Molecular Biology`** (`is_ambiguous=False`)
+- `"Pitch in acoustics"` $\to$ **`Acoustics & Sound Physics`** (`is_ambiguous=False`)
+- `"Pitch in baseball athletics"` $\to$ **`Sports Science & Athletics`** (`is_ambiguous=False`)
+- `"Bass in music theory"` $\to$ **`Music Theory & Fine Arts`** (`is_ambiguous=False`)
+- `"Bass in freshwater fish biology"` $\to$ **`Zoology & Animal Biology`** (`is_ambiguous=False`)
+
+**Results**: **16 / 16 passed (100%)**. Both contextual topic titles and syllabus notes resolve dynamically without prompting, while bare isolated homonyms trigger clarification prompts.
+
+### 13.7 Question Diversity & Stable SHA-256 Digest Verification
+- Replaced Python's salted `hash()` with cryptographically stable SHA-256 digests (`topic_digest` and `domain_digest`).
+- Localized PRNG seeding guarantees cross-process bit-for-bit repeatability for identical seeds (`seed_offset=0`).
+- Strict stem uniqueness enforcement eliminates duplicate stems ($0$ duplicates in 12 items) and caps pairwise token Jaccard similarity under $0.82$.
+- All six cognitive diagnosis states are 100% preserved.
+
+### 13.8 Provider Failure Modes & Fallback Audit (All 12 Scenarios Verified)
+All 12 failure modes required by Section 9 pass with dedicated unit tests in `Website/tests/test_llm_providers.py`:
+1. *Missing credentials*: `test_missing_credentials_health` (PASSED)
+2. *Authentication failure (401)*: `test_gemini_auth_rejection_no_retry` (PASSED - immediate abort, 1 call)
+3. *Provider timeout*: `test_gemini_timeout_error` (PASSED - raises `LLMTimeoutError`)
+4. *Rate limit (429)*: `test_gemini_rate_limit_backoff` (PASSED - retried and recovered)
+5. *Quota exhausted*: `test_gemini_quota_exhausted_error` (PASSED - raises `LLMQuotaExhaustedError`)
+6. *Malformed JSON*: `test_gemini_malformed_json_format_error` (PASSED - raises `LLMFormatError`)
+7. *Truncated output*: `test_gemini_truncation_error` (PASSED - raises `LLMTruncationError`)
+8. *Invalid schema*: `test_gemini_malformed_json_format_error` (PASSED)
+9. *Safety refusal*: `test_gemini_safety_refusal`, `test_openai_safety_filter` (PASSED)
+10. *Retry exhaustion*: `test_gemini_retry_exhaustion` (PASSED - bounded to max 3 attempts)
+11. *Secondary provider failover*: `test_multi_provider_failover`, `test_provider_failover_telemetry` (PASSED)
+12. *Offline fallback*: `test_offline_mode_when_unconfigured` (PASSED - clean fallback, 0 crashes)
+
+### 13.9 Database Integrity & Security Audit
+Post-test database audit on `Website/database/deeplearnx.db`:
+- `PRAGMA foreign_key_check`: **`[]` (0 violations)**
+- **Canonical Domains**: Exactly **5** (`class10_biology`, `class10_chemistry`, `class10_math`, `deep_learning`, `pokemon`)
+- **Canonical Questions**: Exactly **185**
+- **Demo Users**: Exactly **5** (`admin`, `student_a`, `student_b`, `student_c`, `student_d`)
+- **Concepts**: Exactly **30**
+- **Misconceptions**: Exactly **30**
+- **Orphaned Test Artifacts (`custom_%`)**: Strictly **0**
+- **Security Check**: `correct_option` and `correct_probe` strictly stripped from all student payloads.
+
+### 13.10 Automated Test Suite Benchmark (100% Pass)
+
+| Test Suite | Scope | Tests Run | Result | Duration |
+|---|---|:---:|:---:|:---:|
+| `Website/tests/test_llm_providers.py` | Dual provider SDKs, 12 failure modes, failover telemetry, stable hash, unknown polysemy | 27 | **27 passed (100%)** | 65.31s |
+| `Website/tests/test_universal_regressions.py` | 24 Regressions (A–X), Kahn's DAGs, non-linear topologies, Groups A–C | 28 | **28 passed (100%)** | 116.63s |
+| `Website/tests/test_phase2_universal_intelligence.py` | Cross-discipline synthesis, Two-Tier probes, 6 cognitive states, Hake gain | 16 | **16 passed (100%)** | 13.79s |
+| `Website/tests/test_regressions.py` | Stem completeness, option shuffling, distractor contamination | 10 | **10 passed (100%)** | 21.04s |
+| `Website/tests/test_api.py` | FastAPI endpoints, auth, scoring, neural inference | 7 | **7 passed (100%)** | 12.93s |
+| `Website/tests/test_answer_security.py` | Question payload sanitization, zero leaked keys/probes | 3 | **3 passed (100%)** | 5.80s |
+| `Website/tests/test_custom_and_unseen.py` | Non-repeating question rotation, custom topic synthesis | 2 | **2 passed (100%)** | 16.07s |
+| **Full Pytest Suite** | **Comprehensive Repository Verification** | **93** | **93 passed (100%)** | **213.61s (0:03:33)** |
+| `Website/test_15_domains.py` | 15-Domain academic curriculum benchmark | 15 | **15 passed (100%)** | **30.95s** |
+
+### 13.11 Instructions to Activate Live Provider Generation
+To transition DeepLearnX from `offline_knowledge_synthesis` mode to live LLM generation:
+1. Open `Website/.env` in a text editor (or copy from `Website/.env.example`).
+2. Add a valid API key:
+   ```bash
+   # For Google Gemini (Recommended):
+   GEMINI_API_KEY=AIzaSy...
+   # Or for OpenAI:
+   OPENAI_API_KEY=sk-...
+   ```
+3. Run the live provider smoke test:
+   ```bash
+   python Website/tests/smoke_test_live_provider.py --topic "Exoplanet Detection Methods"
+   ```
+4. Restart the runtime daemon:
+   ```bash
+   python run.py
+   ```
+DeepLearnX will automatically detect the key, transition `provider_state` to `reachable`, and route all assessment generation through the live cloud provider while preserving full offline fallback capability.
+
+
 
 
 

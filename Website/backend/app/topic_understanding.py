@@ -642,7 +642,7 @@ class TopicUnderstandingEngine:
             logger.warning(f"Evidence retrieval failed: {e}")
 
         # 3. Detect domain metadata & icon
-        icon, category = detect_domain_meta(clean_topic, evidence_articles)
+        icon, category = detect_domain_meta(clean_topic, evidence_articles, context=f"{syllabus_text} {topic}")
 
         # 4. Attempt live LLM structured interpretation if provider ready
         active_provider = self.provider_manager.get_active_provider()

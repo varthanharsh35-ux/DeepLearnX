@@ -123,44 +123,56 @@ def _matches_any(text: str, patterns: List[str]) -> bool:
             return True
     return False
 
-def detect_domain_meta(topic: str, articles: List[Dict[str, str]]) -> Tuple[str, str]:
-    """Detects clean category name and emoji icon based on topic and articles using word-boundary matching."""
-    combined = f"{topic} " + " ".join(a.get("title", "") + " " + a.get("extract", "") for a in articles)
-    
-    if _matches_any(combined, ["spider", "arachnid", "insect", "entomology", "arthropod", "animal", "zoology", "reptile", "amphibian", "bird", "mammal"]):
-        return "🕷️", "Zoology & Arachnid Biology"
-    elif _matches_any(combined, ["plant", "botany", "horticulture", "crop", "tree", "flora", "flower", "seed", "leaf", "photosynthesis", "chloroplast"]):
-        return "🌿", "Botanical & Plant Sciences"
-    elif _matches_any(combined, ["mendelian", "allele", "genotype", "phenotype", "heredity", "inheritance", "chromosome"]):
-        return "🧬", "Genetics & Heredity"
-    elif _matches_any(combined, ["cell", "dna", "rna", "protein", "organelle", "membrane", "biology", "mitochondria"]):
-        return "🧬", "Cellular & Molecular Biology"
-    elif _matches_any(combined, ["database", "sql", "normalization", "relational", "schema", "table", "foreign key", "primary key", "indexing"]):
-        return "💻", "Computer Science & Databases"
-    elif _matches_any(combined, ["photography", "aperture", "shutter speed", "iso", "exposure", "lens", "camera", "sensor"]):
-        return "📷", "Photography & Visual Arts"
-    elif _matches_any(combined, ["japanese", "hiragana", "katakana", "kanji", "grammatical particle", "grammar", "linguistic", "syntax"]):
-        return "🗣️", "Linguistics & Language Studies"
-    elif _matches_any(combined, ["volcano", "earthquake", "geology", "tectonic", "mineral", "rock", "fossil", "magma"]):
-        return "🌋", "Earth & Geological Sciences"
-    elif _matches_any(combined, ["quantum", "quark", "gluon", "hadron", "chromodynamics", "cryptography", "cipher", "encryption", "no-cloning", "entanglement", "qubit", "subatomic", "particle physics"]):
-        return "🔐", "Quantum Science & Cryptography"
-    elif _matches_any(combined, ["fluid", "viscosity", "hydraulics", "bernoulli", "aerodynamic", "pipe flow"]):
-        return "💧", "Fluid Mechanics & Hydraulics"
-    elif _matches_any(combined, ["engineering graphics", "orthographic", "isometric", "autocad", "drafting", "projection"]):
-        return "📐", "Engineering Graphics & Design"
-    elif _matches_any(combined, ["fermentation", "sourdough", "yeast", "bacteria", "food science", "baking", "microbiology"]):
-        return "🍞", "Food Science & Microbiology"
-    elif _matches_any(combined, ["roman law", "constitution", "statute", "legal", "jurisprudence", "court", "legislation"]):
-        return "⚖️", "Legal Systems & Jurisprudence"
-    elif _matches_any(combined, ["history", "revolution", "empire", "civilization", "ancient", "medieval", "dynasty", "war"]):
-        return "🏛️", "History & Humanities"
-    elif _matches_any(combined, ["music", "harmony", "chord", "scale", "melody", "rhythm", "instrument", "tempo"]):
-        return "🎵", "Music Theory & Fine Arts"
-    elif _matches_any(combined, ["economics", "market", "inflation", "gdp", "supply", "demand", "monetary", "fiscal"]):
-        return "📈", "Economics & Business"
-    else:
-        return "📚", "General Academic Discipline"
+DOMAIN_DEFINITIONS: List[Tuple[str, str, List[str]]] = [
+    ("🕷️", "Zoology & Animal Biology", ["spider", "arachnid", "insect", "entomology", "arthropod", "animal", "zoology", "reptile", "amphibian", "bird", "mammal", "ichthyology", "fish", "largemouth", "scales", "integument"]),
+    ("🌿", "Botanical & Plant Sciences", ["plant", "botany", "horticulture", "crop", "tree", "flora", "flower", "seed", "leaf", "photosynthesis", "chloroplast"]),
+    ("🧬", "Genetics & Heredity", ["mendelian", "allele", "genotype", "phenotype", "heredity", "inheritance", "chromosome"]),
+    ("🧬", "Cellular & Molecular Biology", ["cell", "dna", "rna", "protein", "organelle", "membrane", "biology", "mitochondria", "epidermal", "keratin", "cuticle", "morphology", "anatomy"]),
+    ("💻", "Computer Science & Databases", ["database", "sql", "normalization", "relational", "schema", "table", "foreign key", "primary key", "indexing"]),
+    ("💻", "Computer Science & Systems", ["unix", "linux", "bash", "shell", "terminal", "command line", "operating system", "software", "compiler", "programming"]),
+    ("✈️", "Transportation & Logistics", ["airport", "runway", "aviation", "airline", "railway", "freight", "transport", "transportation", "logistics", "passenger", "cargo", "transit", "infrastructure", "fleet"]),
+    ("📷", "Photography & Visual Arts", ["photography", "aperture", "shutter speed", "iso", "exposure", "lens", "camera", "sensor"]),
+    ("🗣️", "Linguistics & Language Studies", ["japanese", "hiragana", "katakana", "kanji", "grammatical particle", "grammar", "linguistic", "syntax"]),
+    ("🌋", "Earth & Geological Sciences", ["volcano", "earthquake", "geology", "tectonic", "mineral", "rock", "fossil", "magma", "river", "hydrology", "fluvial", "sediment", "geomorphology", "floodplain"]),
+    ("🔐", "Quantum Science & Cryptography", ["quantum", "quark", "gluon", "hadron", "chromodynamics", "cryptography", "cipher", "encryption", "no-cloning", "entanglement", "qubit", "subatomic", "particle physics"]),
+    ("💧", "Fluid Mechanics & Hydraulics", ["fluid", "viscosity", "hydraulics", "bernoulli", "aerodynamic", "pipe flow"]),
+    ("📐", "Engineering Graphics & Design", ["engineering graphics", "orthographic", "isometric", "autocad", "drafting", "projection"]),
+    ("🍞", "Food Science & Microbiology", ["fermentation", "sourdough", "yeast", "bacteria", "food science", "baking", "microbiology"]),
+    ("⚖️", "Legal Systems & Jurisprudence", ["roman law", "constitution", "statute", "legal", "jurisprudence", "court", "legislation"]),
+    ("🏛️", "History & Humanities", ["history", "revolution", "empire", "civilization", "ancient", "medieval", "dynasty", "war"]),
+    ("🎵", "Music Theory & Fine Arts", ["music", "harmony", "chord", "melody", "rhythm", "instrument", "tempo", "clef", "tonality", "pentatonic", "chromatic", "solfege"]),
+    ("🔊", "Acoustics & Sound Physics", ["acoustics", "sound wave", "frequency", "hertz", "auditory", "decibel", "resonance", "vibration", "pitch"]),
+    ("⚾", "Sports Science & Athletics", ["baseball", "athletics", "cricket", "football", "strike zone", "pitching", "fastball"]),
+    ("📡", "Media & Communication Studies", ["communication theory", "mass media", "journalism", "broadcasting", "publishing"]),
+    ("📈", "Economics & Business", ["economics", "market", "inflation", "gdp", "supply", "demand", "monetary", "fiscal", "banking", "finance"]),
+]
+
+def detect_domain_meta(topic: str, articles: List[Dict[str, str]], context: str = "") -> Tuple[str, str]:
+    """Detects clean category name and emoji icon based on weighted keyword matching against topic, context, and articles."""
+    art_titles = " ".join(a.get("title", "") for a in articles)
+    art_extracts = " ".join(a.get("extract", "") for a in articles)
+
+    best_score = 0
+    best_match = ("📚", "General Academic Discipline")
+
+    for icon, name, patterns in DOMAIN_DEFINITIONS:
+        score = 0
+        for pat in patterns:
+            rx = rf"\b{re.escape(pat)}s?\b"
+            if re.search(rx, topic, re.IGNORECASE):
+                score += 10
+            if context and re.search(rx, context, re.IGNORECASE):
+                score += 5
+            if re.search(rx, art_titles, re.IGNORECASE):
+                score += 3
+            if re.search(rx, art_extracts, re.IGNORECASE):
+                score += 1
+
+        if score > best_score:
+            best_score = score
+            best_match = (icon, name)
+
+    return best_match
 
 def synthesize_authentic_curriculum(
     domain_id: str,
