@@ -552,7 +552,13 @@ def get_assessment_questions(
 @app.get("/api/assessment/provider-status")
 def get_provider_status():
     """Endpoint for UI and testing to inspect configured LLM providers and active generation mode."""
-    from backend.app.syllabus_generator import check_provider_status
+    try:
+        from syllabus_generator import check_provider_status
+    except ImportError:
+        try:
+            from app.syllabus_generator import check_provider_status
+        except ImportError:
+            from backend.app.syllabus_generator import check_provider_status
     return check_provider_status()
 
 @app.post("/api/assessment/custom-generate")
@@ -949,9 +955,29 @@ def get_session_details(session_id: str):
 
 # ----------------- REMEDIAL ASSESSMENT ENDPOINTS -----------------
 
+@app.get("/api/assessment/remedial-lesson/{concept_id}")
+@app.get("/api/remedial/lesson/{concept_id}")
+def get_remedial_lesson_endpoint(concept_id: str, domain: Optional[str] = None):
+    """
+    Returns the comprehensive 12-section pedagogical remedial learning document for any concept,
+    including intuitive analogies, mechanics, contrasting examples, common traps, and verification quiz.
+    """
+    try:
+        from concept_guide import generate_12_section_remedial_document
+    except ImportError:
+        try:
+            from app.concept_guide import generate_12_section_remedial_document
+        except ImportError:
+            from backend.app.concept_guide import generate_12_section_remedial_document
+    doc = generate_12_section_remedial_document(concept_id, domain)
+    return doc
+
 @app.get("/api/remedial/questions")
 def get_remedial_questions(concept_id: str = "", count: int = 3, domain: str = ""):
-    """Returns questions specifically targeting the identified weak concept or prerequisite gap within the domain."""
+    """
+    Returns targeted remedial questions strictly within the active domain and concept.
+    Guarantees ZERO cross-domain topic leakage (Regression M).
+    """
     conn = get_db_connection()
     target_domain = domain.strip() if domain else ""
     
@@ -996,15 +1022,17 @@ def get_remedial_questions(concept_id: str = "", count: int = 3, domain: str = "
             """, (target_domain, needed)).fetchall()
         rows = list(rows) + list(extra)
 
-    if not rows:
+    # Strictly domain-filtered: Never fall back to questions from unrelated domains!
+    if not rows and target_domain:
         rows = conn.execute("""
             SELECT q.id, q.domain_id, q.concept_id, q.question_type, q.difficulty, q.question_text,
                    q.option_a, q.option_b, q.option_c, q.option_d, c.name as concept_name
             FROM questions q
             JOIN concepts c ON q.concept_id = c.id
+            WHERE q.domain_id = ?
             ORDER BY RANDOM()
             LIMIT ?
-        """, (count,)).fetchall()
+        """, (target_domain, count)).fetchall()
         
     conn.close()
     

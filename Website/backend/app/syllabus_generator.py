@@ -1824,7 +1824,13 @@ class SyllabusGeneratorEngine:
             })
 
         # Validate before persisting
-        from backend.app.quiz_validator import validate_curriculum_package
+        try:
+            from quiz_validator import validate_curriculum_package
+        except ImportError:
+            try:
+                from app.quiz_validator import validate_curriculum_package
+            except ImportError:
+                from backend.app.quiz_validator import validate_curriculum_package
         is_valid, validation_errors = validate_curriculum_package(concepts, misconceptions, questions, category)
         if not is_valid:
             print(f"[Validation Warning] Structured spec had issues: {validation_errors[:3]}")
@@ -1868,7 +1874,13 @@ class SyllabusGeneratorEngine:
         """Dynamic domain-aware generator when neither LLM API nor curated topic matched.
         Uses universal cognitive multi-disciplinary question engine for authentic, non-repeating curricula.
         """
-        from backend.app.topic_researcher import fetch_wikipedia_knowledge, synthesize_authentic_curriculum
+        try:
+            from topic_researcher import fetch_wikipedia_knowledge, synthesize_authentic_curriculum
+        except ImportError:
+            try:
+                from app.topic_researcher import fetch_wikipedia_knowledge, synthesize_authentic_curriculum
+            except ImportError:
+                from backend.app.topic_researcher import fetch_wikipedia_knowledge, synthesize_authentic_curriculum
         
         # 1. Fetch live encyclopedic knowledge for the topic
         print(f"[Topic Researcher] Researching factual knowledge for '{topic_title}'...")

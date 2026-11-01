@@ -20,18 +20,36 @@ from typing import Dict, List, Tuple, Any, Optional
 
 USER_AGENT = "DeepLearnX/2.0 (CognitiveEducationalResearch; research@deeplearnx.edu)"
 
-# Disallowed biographical / pop-culture terms in Wikipedia article descriptions
+# Disallowed biographical / pop-culture / tangential terms in Wikipedia article descriptions
 BIOGRAPHICAL_DISALLOW = [
     "singer", "musician", "songwriter", "actor", "actress", "band",
     "rock band", "album", "song", "film", "television", "tv series",
     "politician", "footballer", "cricketer", "baseball", "athlete",
-    "wrestler", "record producer"
+    "wrestler", "record producer", "video game", "comic book", "fictional character",
+    "born 19", "born 20", "lawyer (born", "diplomat (born"
+]
+
+MILITARY_CONFLICT_TERMS = [
+    "war", "battle", "military conflict", "armed conflict", "military intervention",
+    "naval blockade", "military campaign", "invasion"
 ]
 
 def fetch_wikipedia_knowledge(topic: str) -> List[Dict[str, str]]:
     """Fetches relevant core Wikipedia articles and extracts for a given topic,
-    filtering out biographical and pop-culture disambiguation pages."""
+    filtering out biographical, military war puns, and pop-culture disambiguation pages."""
     clean_topic = topic.strip()
+    try:
+        from curated_extensions import normalize_topic_title
+    except ImportError:
+        try:
+            from app.curated_extensions import normalize_topic_title
+        except ImportError:
+            from backend.app.curated_extensions import normalize_topic_title
+    clean_topic = normalize_topic_title(clean_topic)
+    
+    # Check if user topic is genuinely military or history of warfare
+    is_military_topic = any(k in clean_topic.lower() for k in ["war", "battle", "military", "conflict", "invasion", "revolution"])
+    
     # Normalize query: strip filler words and part phrases to find core encyclopedic article
     search_term = re.sub(r'^(types of|introduction to|fundamentals of|basics of|principles of)\s+', '', clean_topic, flags=re.IGNORECASE)
     search_term = re.sub(r'\s+and\s+(its|their)\s+parts.*$', '', search_term, flags=re.IGNORECASE)
@@ -51,17 +69,20 @@ def fetch_wikipedia_knowledge(topic: str) -> List[Dict[str, str]]:
                 # Skip disambiguation, media, listicles
                 if any(k in title_low for k in ["disambiguation", "film", "album", "song", "band", "character", "tv series", "discography"]):
                     continue
+                # If non-military topic, skip military conflict articles (e.g. Pastry War when searching French Pastry)
+                if not is_military_topic and any(m in title_low for m in ["war", "battle of", "siege of", "invasion of"]):
+                    continue
                 # If searching general broad topic like plants, skip Latin binomial species (e.g. Solidago canadensis)
                 if "plant" in search_term.lower() and re.search(r'^[A-Z][a-z]+\s+[a-z]+$', title) and "plant" not in title_low:
                     continue
                 results.append(title)
-                if len(results) >= 6:
+                if len(results) >= 8:
                     break
     except Exception as e:
         print(f"[Topic Researcher] Wikipedia search failed: {e}")
         return []
 
-    # Fetch summary for each candidate article and filter out biographical entities
+    # Fetch summary for each candidate article and filter out biographical and irrelevant entities
     articles = []
     for title in results:
         url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(title)}"
@@ -70,9 +91,15 @@ def fetch_wikipedia_knowledge(topic: str) -> List[Dict[str, str]]:
             with urllib.request.urlopen(req, timeout=5) as resp:
                 d = json.loads(resp.read().decode())
                 desc = (d.get("description") or "").lower()
-                # Exclude biographical entries (e.g., Robert Plant when searching Plants)
+                
+                # Exclude biographical entries
                 if any(term in desc for term in BIOGRAPHICAL_DISALLOW):
                     continue
+                    
+                # Exclude military conflicts for non-military topics
+                if not is_military_topic and any(term in desc for term in MILITARY_CONFLICT_TERMS):
+                    continue
+                    
                 extract = d.get("extract", "")
                 if extract and len(extract) > 80:
                     articles.append({
@@ -142,8 +169,16 @@ def synthesize_authentic_curriculum(
     specifically built from real-world scientific and academic knowledge.
     Uses TopicInterpreter to establish the pedagogical scope and build genuine questions.
     """
-    from backend.app.topic_interpreter import interpret_topic_scope
-    from backend.app.quiz_validator import validate_curriculum_package
+    try:
+        from topic_interpreter import interpret_topic_scope
+        from quiz_validator import validate_curriculum_package
+    except ImportError:
+        try:
+            from app.topic_interpreter import interpret_topic_scope
+            from app.quiz_validator import validate_curriculum_package
+        except ImportError:
+            from backend.app.topic_interpreter import interpret_topic_scope
+            from backend.app.quiz_validator import validate_curriculum_package
     
     # 1. Interpret topic and construct authentic knowledge brief with research extracts
     brief = interpret_topic_scope(topic_title, articles=articles)
@@ -201,14 +236,16 @@ def synthesize_authentic_curriculum(
         to_add = random.sample(candidate_indices, min(needed, len(candidate_indices))) if candidate_indices else []
         for c_idx in to_add:
             corr_text = raw_qs[c_idx]["option_a"]
+            if corr_text.lower().startswith("because "):
+                corr_text = corr_text[8:]
             c_name = concepts[c_idx // 3]["name"] if (c_idx // 3) < len(concepts) else topic_title
             raw_qs[c_idx]["reasoning_probe"] = {
-                "prompt": f"Why does this principle or relationship govern {c_name}?",
+                "prompt": f"Why is this foundational principle or relationship valid for {c_name}?",
                 "options": {
-                    "A": f"Because {corr_text.rstrip('.')} under governing constraints.",
-                    "B": f"Because introductory definitions can be ignored in applied contexts.",
-                    "C": f"Because system variables fluctuate randomly without physical or logical rules.",
-                    "D": f"Because academic standards require selecting this option regardless of facts."
+                    "A": f"Because {corr_text.rstrip('.')}.",
+                    "B": "Because introductory definitions can be discarded once practical problems begin.",
+                    "C": "Because observational variables fluctuate randomly without underlying rules.",
+                    "D": "Because academic convention requires selecting this option regardless of facts."
                 },
                 "correct_probe": "A"
             }
@@ -227,9 +264,11 @@ def synthesize_authentic_curriculum(
         
         q_obj = {
             "id": f"{domain_id}_q{i+1}",
+            "question_id": f"{domain_id}_q{i+1}",
             "domain_id": domain_id,
             "concept_id": cid,
             "question_type": q_def.get("question_type", "basic"),
+            "difficulty_tier": q_def.get("question_type", "basic"),
             "difficulty": q_def.get("difficulty", "easy"),
             "question_text": q_def["question_text"],
             "option_a": q_def["option_a"],
@@ -291,4 +330,10 @@ def build_curriculum_from_articles(
     return synthesize_authentic_curriculum(domain_id, topic_title, articles)
 
 # Export balance_sentence for text sanitization and testing
-from backend.app.quiz_validator import balance_sentence as _balance_sentence
+try:
+    from quiz_validator import balance_sentence as _balance_sentence
+except ImportError:
+    try:
+        from app.quiz_validator import balance_sentence as _balance_sentence
+    except ImportError:
+        from backend.app.quiz_validator import balance_sentence as _balance_sentence

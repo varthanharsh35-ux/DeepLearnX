@@ -12,6 +12,26 @@ Implements strict pedagogical validation rules to eliminate:
 import re
 from typing import Dict, List, Tuple, Any, Optional
 
+# Generic engineering boilerplate terms that must NEVER appear in non-engineering disciplines
+GENERIC_ENGINEERING_CONTAMINANTS = [
+    "feedback regulation",
+    "system equilibrium",
+    "non-linear saturation",
+    "critical threshold",
+    "governing mechanism",
+    "fluctuating operational",
+    "foundational premise inversion",
+    "directional causality trap",
+    "boundary limit neglect",
+    "symptom vs. root cause confusion",
+    "an analyst extrapolates",
+    "an engineer extrapolates",
+    "governing boundary constraints",
+    "operational boundaries",
+    "linear model extrapolation",
+    "damping breakdown"
+]
+
 # Prohibited cross-domain contamination terms by category
 FORBIDDEN_CONTAMINANTS = {
     "biology": [
@@ -34,6 +54,10 @@ FORBIDDEN_CONTAMINANTS = {
     "law": [
         "chloroplast", "mitochondria", "hydrocarbon", "reynolds number",
         "compiler pass", "quantum entanglement"
+    ],
+    "culinary": [
+        "operating system", "compiler pass", "packet routing", "quantum entanglement",
+        "hydraulic pressure", "reynolds number", "parliamentary decree", "linear extrapolation"
     ]
 }
 
@@ -45,13 +69,34 @@ DANGLING_ENDINGS = [
     r'\bincluding\.\s*$', r'\bbecause\.\s*$'
 ]
 
-# Robotic boilerplate stems that must not be used on elementary topics
+# Robotic boilerplate stems that must not be used on academic topics
 ROBOTIC_STEMS = [
     r'what primary governing mechanism or functional role characterizes',
     r'what core analytical principle must be applied',
     r'according to academic classification, which statement accurately defines',
-    r'what defines the governing boundary constraints and conservation limits'
+    r'what defines the governing boundary constraints and conservation limits',
+    r'how do governing mechanisms maintain stability under fluctuating operational conditions',
+    r'extrapolates a linear model.*far beyond its empirically validated threshold'
 ]
+
+
+def check_topic_name_integrity(name: str) -> Tuple[bool, str]:
+    """Ensures topic name does not have corruptions, typos like 'Lawss', or duplication."""
+    if not name or len(name.strip()) < 2:
+        return False, "Topic name is empty or too short."
+    cleaned = name.strip()
+    # Check for corruptions like 'Lawss' (double 's' at end of word not in standard double-s words)
+    standard_ss = {"pass", "class", "grass", "glass", "brass", "mass", "bass", "compass", "bypass",
+                   "loss", "boss", "moss", "cross", "gloss", "dross",
+                   "kiss", "miss", "hiss", "bliss", "abyss",
+                   "fuss", "muss", "truss",
+                   "stress", "process", "access", "success", "excess", "progress", "recess", "address",
+                   "express", "impress", "press", "business", "illness", "fitness", "darkness", "witness"}
+    for word in cleaned.split():
+        w_low = word.lower().strip(".,!?:;-()")
+        if w_low.endswith("ss") and w_low not in standard_ss and len(w_low) > 3:
+            return False, f"Corrupted topic name detected with invalid double 's': '{word}'"
+    return True, "Valid"
 
 
 def check_sentence_completeness(text: str) -> Tuple[bool, str]:
@@ -76,26 +121,34 @@ def check_sentence_completeness(text: str) -> Tuple[bool, str]:
 
 
 def check_distractor_contamination(options: List[str], category: str) -> Tuple[bool, str]:
-    """Checks for absurd cross-domain contamination in option strings."""
+    """Checks for absurd cross-domain contamination and generic engineering jargon in option strings."""
     cat_low = category.lower()
     
     # Determine which forbidden list applies
     active_forbidden = []
+    is_engineering = any(k in cat_low for k in ["engineering graphics", "fluid mechanics", "control system", "mechanical engineering"])
+    
+    # For non-engineering categories, strictly forbid generic engineering contaminants
+    if not is_engineering:
+        active_forbidden.extend(GENERIC_ENGINEERING_CONTAMINANTS)
+        
     if any(k in cat_low for k in ["biolog", "plant", "botan", "zoolog", "spider", "insect", "medic"]):
         active_forbidden.extend(FORBIDDEN_CONTAMINANTS["biology"])
-    elif any(k in cat_low for k in ["history", "humanit", "revolution"]):
+    elif any(k in cat_low for k in ["history", "humanit", "revolution", "leader"]):
         active_forbidden.extend(FORBIDDEN_CONTAMINANTS["history"])
     elif any(k in cat_low for k in ["music", "art"]):
         active_forbidden.extend(FORBIDDEN_CONTAMINANTS["music"])
-    elif any(k in cat_low for k in ["math", "fraction", "arithmetic"]):
+    elif any(k in cat_low for k in ["math", "fraction", "arithmetic", "probability"]):
         active_forbidden.extend(FORBIDDEN_CONTAMINANTS["math"])
     elif any(k in cat_low for k in ["law", "constitution", "legal"]):
         active_forbidden.extend(FORBIDDEN_CONTAMINANTS["law"])
+    elif any(k in cat_low for k in ["culinary", "pastry", "baking", "food"]):
+        active_forbidden.extend(FORBIDDEN_CONTAMINANTS["culinary"])
         
     for opt in options:
         opt_low = opt.lower()
         for forbidden in active_forbidden:
-            if forbidden in opt_low:
+            if forbidden.lower() in opt_low:
                 return False, f"Found forbidden cross-domain contamination '{forbidden}' in option: '{opt[:60]}...'"
                 
     return True, "Clean"
@@ -131,10 +184,15 @@ def validate_question(q: Dict[str, Any], category: str = "") -> Tuple[bool, List
     """
     errors = []
     
-    # 1. Text presence
+    # 1. Text presence and robotic stem rejection
     q_text = q.get("question_text", "").strip()
     if not q_text or len(q_text) < 15:
         errors.append("Question text missing or too short.")
+    else:
+        q_low = q_text.lower()
+        for stem in ROBOTIC_STEMS:
+            if re.search(stem, q_low, re.IGNORECASE):
+                errors.append(f"Robotic boilerplate stem detected: '{stem}'")
         
     # 2. Options completeness
     opts = [
@@ -187,6 +245,8 @@ def validate_question(q: Dict[str, Any], category: str = "") -> Tuple[bool, List
                 p_comp_ok, p_comp_err = check_sentence_completeness(p_txt)
                 if not p_comp_ok:
                     errors.append(f"Probe option {p_ltr} incomplete: {p_comp_err}")
+                if re.search(r'\bbecause\s+because\b', p_txt, re.IGNORECASE):
+                    errors.append(f"Probe option {p_ltr} contains duplicate 'Because Because'")
         if p_corr not in ["A", "B", "C", "D"]:
             errors.append(f"Invalid probe correct_probe: {p_corr}")
             
@@ -229,11 +289,16 @@ def validate_curriculum_package(
         errors.append(f"Expected between 3 and 5 reasoning probes, got {probes_count}.")
         
     # Remediation quality check on misconceptions: must NOT be generic filler
-    generic_filler = "review fundamental definitions and empirical dependencies carefully"
+    generic_fillers = [
+        "review fundamental definitions and empirical dependencies carefully",
+        "before evaluating complex scenarios",
+        "without verifying initial baseline definitions"
+    ]
     for m in misconceptions:
         rem = (m.get("remediation") or "").lower()
-        if generic_filler in rem:
-            errors.append(f"Generic remediation filler detected in misconception: '{m.get('name')}'")
+        for gf in generic_fillers:
+            if gf in rem:
+                errors.append(f"Generic remediation filler detected in misconception: '{m.get('name')}'")
             
     return len(errors) == 0, errors
 

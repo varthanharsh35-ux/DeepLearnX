@@ -36,6 +36,21 @@ def normalize_topic_title(raw_title: str) -> str:
     # Clean multiple spaces and strip trailing punctuation
     t = re.sub(r'\s+', ' ', t).strip(' .,!?:;-')
     
+    # Clean corrupted double/triple 's' at word endings (e.g. Lawss -> Law)
+    standard_ss = {"pass", "class", "grass", "glass", "brass", "mass", "bass", "compass", "bypass",
+                   "loss", "boss", "moss", "cross", "gloss", "dross",
+                   "kiss", "miss", "hiss", "bliss", "abyss",
+                   "fuss", "muss", "truss",
+                   "stress", "process", "access", "success", "excess", "progress", "recess", "address",
+                   "express", "impress", "press", "business", "illness", "fitness", "darkness", "witness"}
+    cleaned_words = []
+    for w in t.split():
+        w_low = w.lower().strip(".,!?:;-()")
+        if w_low.endswith("ss") and w_low not in standard_ss and len(w_low) > 3:
+            w = re.sub(r's+$', '', w)
+        cleaned_words.append(w)
+    t = " ".join(cleaned_words)
+    
     # Title Case if not all uppercase acronym
     if not t.isupper() and not any(w.isupper() and len(w) > 1 for w in t.split()):
         t = t.title()

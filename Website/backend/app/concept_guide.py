@@ -288,6 +288,9 @@ CONCEPT_GUIDE = {
 }
 
 import sqlite3
+import json
+import re
+from pathlib import Path
 
 def register_concept_guide(guide: dict):
     """Registers or updates a concept guide entry dynamically."""
@@ -334,4 +337,188 @@ def get_concept_guide(concept_id: str, domain_id: str = None) -> dict:
         "common_mistake": "Skipping fundamental steps or applying formulas without checking the problem conditions.",
         "key_takeaway": "Focus on understanding the core principle behind the formula before attempting practice questions."
     }
+
+def generate_12_section_remedial_document(concept_id: str, domain_id: str = None, concept_data: dict = None) -> dict:
+    """
+    Generates a comprehensive, pedagogical 12-section remedial learning document:
+    1. Module Title & Learning Objective
+    2. Prerequisite Foundations Check
+    3. Plain-Language Introduction & Intuitive Analogy
+    4. Deep-Dive Core Mechanics & Working Principles
+    5. Essential Terminology & Technical Definitions
+    6. Real-World Practical Examples & Case Studies
+    7. Step-by-Step Procedure / Diagnostic Framework
+    8. Common Misconceptions & Cognitive Traps
+    9. Contrasting Scenarios (Correct vs Flawed Application)
+    10. Practical Decision Rules of Thumb & Heuristics
+    11. Key Takeaways & Executive Summary
+    12. Knowledge Verification Check (Targeted practice questions)
+    """
+    guide = get_concept_guide(concept_id, domain_id)
+    cname = guide.get("name", concept_id.replace("_", " ").title())
+    core_idea = guide.get("core_idea", "Foundational principles governing this concept.")
+    example = guide.get("example", "Practical scenario illustrating this concept in action.")
+    mistake = guide.get("common_mistake", "Common pitfall when applying this concept.")
+    takeaway = guide.get("key_takeaway", "Mastering this concept ensures reliable problem solving.")
+
+    if concept_data and isinstance(concept_data, dict):
+        cname = concept_data.get("name", cname)
+        core_idea = concept_data.get("core_idea", concept_data.get("description", core_idea))
+        if "category" in concept_data:
+            domain_id = concept_data["category"]
+
+    # Retrieve database metadata if available
+    db_file = Path(__file__).resolve().parents[2] / "database" / "deeplearnx.db"
+    prereqs = []
+    misconceptions = []
+    questions = []
+    domain_name = domain_id or "Academic Curriculum"
+
+    if db_file.exists():
+        try:
+            conn = sqlite3.connect(str(db_file))
+            conn.row_factory = sqlite3.Row
+            
+            # Fetch concept details
+            c_row = conn.execute("SELECT * FROM concepts WHERE id = ?", (concept_id,)).fetchone()
+            if c_row:
+                cname = c_row["name"]
+                domain_id = c_row["domain_id"]
+                prereqs = json.loads(c_row["prerequisites"] or "[]")
+                
+            # Fetch domain name
+            d_row = conn.execute("SELECT name FROM domains WHERE id = ?", (domain_id,)).fetchone()
+            if d_row:
+                domain_name = d_row["name"]
+                
+            # Fetch misconceptions for this concept
+            m_rows = conn.execute("SELECT * FROM misconceptions WHERE concept_id = ?", (concept_id,)).fetchall()
+            for mr in m_rows:
+                misconceptions.append({
+                    "name": mr["name"],
+                    "description": mr["description"],
+                    "remediation": mr["remediation"]
+                })
+                
+            # Fetch questions for this concept
+            q_rows = conn.execute("""
+                SELECT id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation, question_type
+                FROM questions WHERE concept_id = ? ORDER BY question_type ASC LIMIT 3
+            """, (concept_id,)).fetchall()
+            for qr in q_rows:
+                questions.append({
+                    "id": qr["id"],
+                    "type": qr["question_type"],
+                    "text": qr["question_text"],
+                    "options": {
+                        "A": qr["option_a"],
+                        "B": qr["option_b"],
+                        "C": qr["option_c"],
+                        "D": qr["option_d"]
+                    },
+                    "correct": qr["correct_option"],
+                    "explanation": qr["explanation"]
+                })
+            conn.close()
+        except Exception:
+            pass
+
+    # Build 12 Structured Sections
+    sections = [
+        {
+            "section_number": 1,
+            "title": "Module Title & Learning Objective",
+            "content": f"### {cname}\n\n**Curriculum Focus**: {domain_name}\n\n**Target Objective**: By the end of this module, you will thoroughly understand the core mechanisms of **{cname}**, distinguish genuine causal principles from surface correlations, and confidently solve practical application scenarios without falling for common conceptual traps."
+        },
+        {
+            "section_number": 2,
+            "title": "Prerequisite Foundations Check",
+            "content": f"Before mastering **{cname}**, confirm familiarity with foundational terminology and preceding structural principles ({', '.join(prereqs) if prereqs else 'Baseline subject definitions'}). If introductory taxonomy or definitions feel hazy, review the baseline definitions first."
+        },
+        {
+            "section_number": 3,
+            "title": "Plain-Language Introduction & Intuitive Analogy",
+            "content": f"Think of **{cname}** as the underlying structural blueprint: {core_idea}\n\nJust as an architect must verify that a building's load-bearing foundation is secure before assembling upper floors, studying this concept ensures every subsequent rule and calculation rests on solid ground."
+        },
+        {
+            "section_number": 4,
+            "title": "Deep-Dive Core Mechanics & Working Principles",
+            "content": f"In {domain_name}, **{cname}** operates through established relationships and rules:\n\n- **Foundational Premises**: Baseline conditions must be verified before proceeding.\n- **Operational Dynamics**: Key variables interact according to deterministic domain rules rather than random coincidence.\n- **Contextual Bounds**: Specific boundaries dictate when standard behavior holds true and when secondary constraints emerge."
+        },
+        {
+            "section_number": 5,
+            "title": "Essential Terminology & Technical Definitions",
+            "content": f"1. **Core Mechanism**: The primary working dynamic that drives observable results in {cname}.\n2. **Contextual Scope**: The boundary envelope within which standard governing relationships remain valid.\n3. **Causal Pathway**: The direct link connecting initial inputs to measurable outcomes, distinct from passive correlation."
+        },
+        {
+            "section_number": 6,
+            "title": "Real-World Practical Examples & Case Studies",
+            "content": f"**Case Scenario**: {example}\n\nIn this real-world application, practitioners directly rely on the principles of **{cname}** to make accurate decisions and diagnose operational anomalies before they cascade."
+        },
+        {
+            "section_number": 7,
+            "title": "Step-by-Step Procedure / Diagnostic Framework",
+            "content": f"When analyzing problems in **{cname}**, follow this 4-step framework:\n\n1. **Step 1: Verify Initial Conditions**: Confirm baseline parameters and definitions.\n2. **Step 2: Trace the Causal Pathway**: Identify which specific mechanism produces the observed effect.\n3. **Step 3: Test Boundary Assumptions**: Check whether operating constraints or edge cases apply.\n4. **Step 4: Formulate and Verify the Solution**: Corroborate conclusions against established benchmarks."
+        },
+        {
+            "section_number": 8,
+            "title": "Common Misconceptions & Cognitive Traps",
+            "content": f"**Primary Cognitive Trap**: {mistake}\n\n" + (
+                "\n\n".join([f"- **{m['name']}**: {m['description']}\n  *Actionable Correction*: {m['remediation']}" for m in misconceptions])
+                if misconceptions
+                else f"- **Surface vs Root Conflation**: Treating observable symptoms rather than fixing root causes."
+            )
+        },
+        {
+            "section_number": 9,
+            "title": "Contrasting Scenarios (Correct vs Flawed Application)",
+            "content": f"| Scenario Aspect | Flawed Application (Misconception) | Correct Pedagogical Application |\n|---|---|---|\n| **Starting Premise** | Jumping directly into advanced calculations without checking baseline criteria. | Systematically verifying foundational definitions and baseline conditions first. |\n| **Mechanism Analysis** | Assuming passive correlation implies an active driving cause. | Tracing direct causal pathways and verifying independent variable controls. |\n| **Troubleshooting** | Masking superficial symptoms with cosmetic adjustments. | Isolating initiating triggers and addressing the underlying primary defect. |"
+        },
+        {
+            "section_number": 10,
+            "title": "Practical Decision Rules of Thumb & Heuristics",
+            "content": f"- **The Foundation Rule**: Always check preliminary definitions before evaluating complex trade-offs in **{cname}**.\n- **The Causality Rule**: Never assume two simultaneous events cause each other without isolating variables.\n- **The Boundary Rule**: Operating near operational limits always creates coupled trade-offs that require deliberate balancing."
+        },
+        {
+            "section_number": 11,
+            "title": "Key Takeaways & Executive Summary",
+            "content": f"- **Core Principle**: {takeaway}\n- **Operational Mastery**: Understanding the working dynamics of **{cname}** eliminates memorization-based guessing.\n- **Next Steps**: Complete the targeted knowledge verification check below to solidify your understanding."
+        },
+        {
+            "section_number": 12,
+            "title": "Knowledge Verification Check",
+            "content": "Test your mastery on these targeted follow-up practice questions:",
+            "practice_questions": questions
+        }
+    ]
+
+    # Render complete Markdown document
+    md_lines = [
+        f"# DeepLearnX Remedial Learning Guide: {cname}",
+        f"*Discipline: {domain_name} | Concept ID: `{concept_id}`*\n",
+        "---"
+    ]
+    for sec in sections:
+        md_lines.append(f"\n## {sec['section_number']}. {sec['title']}\n")
+        md_lines.append(sec["content"])
+        if "practice_questions" in sec and sec["practice_questions"]:
+            for idx, pq in enumerate(sec["practice_questions"]):
+                md_lines.append(f"\n**Q{idx+1} ({pq['type'].title()}): {pq['text']}**")
+                for ltr, opt in pq["options"].items():
+                    md_lines.append(f"- **{ltr}**: {opt}")
+                md_lines.append(f"*Correct Answer*: **{pq['correct']}** — {pq['explanation']}")
+
+    full_markdown = "\n".join(md_lines)
+
+    return {
+        "concept_id": concept_id,
+        "concept_name": cname,
+        "domain_id": domain_id,
+        "domain_name": domain_name,
+        "sections_count": len(sections),
+        "sections": sections,
+        "practice_questions": questions,
+        "full_markdown": full_markdown
+    }
+
 

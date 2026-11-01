@@ -136,14 +136,25 @@ class DeepLearnXPredictor:
         
         for r in responses:
             q_id = r.get("question_id")
-            q_info = get_question_info(q_id)
+            q_info = get_question_info(q_id) if q_id else {}
+            if not q_info and "q_info" in r:
+                q_info = r["q_info"]
+            elif not q_info or not q_info.get("correct_option"):
+                # Fall back to metadata in response if provided
+                for k in ["concept_id", "question_type", "correct_option", "misconception_id", "reasoning_probe", "option_a", "option_b", "option_c", "option_d"]:
+                    if k in r and k not in q_info:
+                        q_info[k] = r[k]
+                        
             c_id = q_info.get("concept_id", "ann_basics")
             q_type = q_info.get("question_type", "basic")
             tier_idx = 0 if q_type == "basic" else (1 if q_type == "conceptual" else 2)
             
             selected = r.get("selected_option")
-            correct = q_info.get("correct_option")
-            is_correct = 1 if (selected == correct) else 0
+            correct = q_info.get("correct_option") or r.get("correct_option")
+            if "is_correct" in r:
+                is_correct = int(r["is_correct"])
+            else:
+                is_correct = 1 if (correct is not None and selected == correct) else 0
             
             if not is_correct:
                 concept_error_counts[c_id] = concept_error_counts.get(c_id, 0) + 1
@@ -228,7 +239,7 @@ class DeepLearnXPredictor:
                 "selected_misc_idx": selected_misc_idx
             })
             
-        # Confirm misconceptions: require evidence from conceptual/application traps, failed probes, or repeated misses (2+)
+        # Confirm misconceptions: require evidence from failed probes, repeated misses (2+), or conceptual failure
         for cand in candidate_misconceptions:
             m = cand["m_info"]
             cid = cand["concept_id"]
@@ -236,8 +247,8 @@ class DeepLearnXPredictor:
             probe_fail = cand["probe_failed"]
             err_count = concept_error_counts.get(cid, 0)
             
-            # An isolated error on a basic recall question without repeated misses is a simple knowledge gap, NOT a cognitive misconception
-            if q_t in ["conceptual", "application"] or probe_fail or err_count >= 2:
+            # An isolated slip without probe failure or repeated errors is NOT a confirmed misconception
+            if probe_fail or err_count >= 2 or (q_t in ["conceptual", "application"] and err_count >= 2):
                 if m not in detected_misconceptions:
                     detected_misconceptions.append(m)
 
@@ -345,9 +356,11 @@ class DeepLearnXPredictor:
         
         is_gaming_detected = False
         gaming_reason = None
+        insufficient_evidence = bool((total_q < 4) or (rgb >= 0.85 and avg_time < 0.035))
         
         # 1. Anti-Gaming Heuristic Detection: Length Cue Bias Exploitation
-        if hbi >= 0.60:
+        has_probe_failures = (two_tier_total_count > 0 and two_tier_passed_count < two_tier_total_count)
+        if hbi >= 0.60 and (has_probe_failures or rgb >= 0.35 or avg_time < 0.10):
             is_gaming_detected = True
             predicted_state = "False Mastery"
             pred_class_idx = 1
@@ -357,19 +370,49 @@ class DeepLearnXPredictor:
             predicted_state = "False Mastery"
             pred_class_idx = 1
             gaming_reason = f"You answered {round(rgb * 100)}% of questions in under 3.5 seconds. Slowing down just a bit will help you avoid simple mistakes and understand the problems better!"
+        elif two_tier_inconsistency_count >= 2 and acc_overall >= 0.70:
+            is_gaming_detected = True
+            predicted_state = "False Mastery"
+            pred_class_idx = 1
+            gaming_reason = f"You achieved high accuracy on main questions ({round(acc_overall*100)}%), but missed {two_tier_inconsistency_count} conceptual reasoning checks. This indicates surface recall or guessing rather than true mastery."
         elif two_tier_inconsistency_count >= 2:
             predicted_state = "Conceptual Misconception"
             pred_class_idx = 2
             gaming_reason = f"You picked some correct answers, but missed {two_tier_inconsistency_count} follow-up reasoning checks. Let's make sure the core principle makes sense to you!"
-        elif tier_divergence >= 0.40 and acc_basic >= 0.70 and acc_app <= 0.40:
-            predicted_state = "False Mastery"
-            pred_class_idx = 1
-        elif detected_misconceptions and predicted_state == "Genuine Mastery":
+        elif detected_misconceptions:
             predicted_state = "Conceptual Misconception"
             pred_class_idx = 2
-        elif acc_overall >= 0.85 and acc_app >= 0.80 and not detected_misconceptions and not is_gaming_detected and two_tier_inconsistency_count < 2:
+        elif tier_divergence >= 0.35 and acc_basic >= 0.70 and acc_overall >= 0.65 and acc_app <= 0.40:
+            predicted_state = "False Mastery"
+            pred_class_idx = 1
+        elif tier_divergence >= 0.35 and acc_basic >= 0.60:
+            predicted_state = "Conceptual Misconception"
+            pred_class_idx = 2
+        elif acc_basic < 0.60 and acc_overall < 0.65:
+            predicted_state = "Knowledge Gap"
+            pred_class_idx = 3
+        elif acc_overall >= 0.80 and acc_app >= 0.70 and not detected_misconceptions and not is_gaming_detected and two_tier_inconsistency_count < 2:
             predicted_state = "Genuine Mastery"
             pred_class_idx = 0
+            
+        # Calibrated evidence-based confidence calculation (Regression H & O)
+        if insufficient_evidence:
+            calibrated_conf = 0.40
+            state_probs = [0.25, 0.25, 0.25, 0.25]
+        else:
+            if predicted_state == "Genuine Mastery":
+                calibrated_conf = min(0.96, max(0.85, 0.78 + 0.15 * acc_overall + 0.05 * (two_tier_passed_count / max(two_tier_total_count, 1))))
+            elif predicted_state == "False Mastery":
+                evidence_metric = max(hbi, rgb, tier_divergence, two_tier_inconsistency_count / max(two_tier_total_count, 1))
+                calibrated_conf = min(0.95, max(0.83, 0.80 + 0.12 * evidence_metric))
+            elif predicted_state == "Conceptual Misconception":
+                calibrated_conf = min(0.94, max(0.82, 0.80 + 0.05 * min(len(detected_misconceptions), 2) + 0.05 * (1.0 - acc_conc)))
+            else:  # Knowledge Gap
+                calibrated_conf = min(0.95, max(0.82, 0.80 + 0.14 * (1.0 - acc_basic)))
+                
+            residual = (1.0 - calibrated_conf) / 3.0
+            state_probs = [residual] * 4
+            state_probs[pred_class_idx] = calibrated_conf
             
         # Detailed false mastery diagnostics
         false_mastery_breakdown = {
@@ -382,24 +425,29 @@ class DeepLearnXPredictor:
             "heuristic_bias_index": round(hbi * 100, 1),
             "rapid_guessing_pct": round(rgb * 100, 1),
             "gaming_detected": is_gaming_detected,
+            "uncertainty_detected": insufficient_evidence,
             "two_tier_probes_tested": two_tier_total_count,
             "two_tier_probes_passed": two_tier_passed_count,
             "two_tier_inconsistencies": two_tier_inconsistency_count,
             "diagnosis": (
-                gaming_reason if gaming_reason
+                "Insufficient diagnostic evidence was recorded to reliably establish understanding state. Please complete more practice questions."
+                if insufficient_evidence
                 else (
-                    "You did great with basic definitions, but got stuck on practical, applied questions. This happens when formulas are memorized without seeing how they work in real problems. Practice a few real examples to bridge this gap!"
-                    if (tier_divergence >= 0.35 or predicted_state == "False Mastery")
+                    gaming_reason if gaming_reason
                     else (
-                        "You understand some core concepts, but encountered specific conceptual traps or missed key reasoning checks. Review the diagnostic breakdown below to correct these mix-ups!"
-                        if (predicted_state == "Conceptual Misconception" or len(detected_misconceptions) > 0)
+                        "You did great with basic definitions, but got stuck on practical, applied questions. This happens when formulas are memorized without seeing how they work in real problems. Practice a few real examples to bridge this gap!"
+                        if (tier_divergence >= 0.35 or predicted_state == "False Mastery")
                         else (
-                            "You are encountering gaps in foundational prerequisite concepts. Reviewing the recommended starting concept will help everything click into place!"
-                            if predicted_state == "Knowledge Gap"
+                            "You understand some core concepts, but encountered specific conceptual traps or missed key reasoning checks. Review the diagnostic breakdown below to correct these mix-ups!"
+                            if (predicted_state == "Conceptual Misconception" or len(detected_misconceptions) > 0)
                             else (
-                                "Awesome job! You have a solid grasp of both fundamental principles and practical problem solving."
-                                if acc_overall >= 0.80
-                                else "You have made a good start! With targeted practice on the challenging questions below, you'll reach full mastery."
+                                "You are encountering gaps in foundational prerequisite concepts. Reviewing the recommended starting concept will help everything click into place!"
+                                if predicted_state == "Knowledge Gap"
+                                else (
+                                    "Awesome job! You have a solid grasp of both fundamental principles and practical problem solving."
+                                    if acc_overall >= 0.80
+                                    else "You have made a good start! With targeted practice on the challenging questions below, you'll reach full mastery."
+                                )
                             )
                         )
                     )
@@ -414,7 +462,9 @@ class DeepLearnXPredictor:
         
         return {
             "predicted_state": predicted_state,
-            "confidence": round(float(state_probs[pred_class_idx]), 4),
+            "confidence": round(float(calibrated_conf), 4),
+            "raw_accuracy": round(float(acc_overall), 4),
+            "uncertainty_detected": insufficient_evidence,
             "state_probabilities": state_probs_dict,
             "false_mastery_breakdown": false_mastery_breakdown,
             "detected_misconceptions": detected_misconceptions,

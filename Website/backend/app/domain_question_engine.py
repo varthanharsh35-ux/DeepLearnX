@@ -288,12 +288,12 @@ def generate_curriculum_for_topic(
         concept_defs = [
             (f"{topic_title}: Foundational Principles & Core Taxonomy",
              f"Baseline definitions, structural criteria, and the foundational taxonomy of {topic_title}."),
-            (f"{topic_title}: Governing Mechanisms & Causal Interactions",
-             f"Direct causal pathways, interaction dynamics, and governing processes in {topic_title}."),
-            (f"{topic_title}: Boundary Invariants & Systemic Trade-offs",
-             f"Essential constraints, conservation principles, and boundary thresholds in {topic_title}."),
+            (f"{topic_title}: Core Mechanisms & Structural Interactions",
+             f"Direct causal pathways, interaction dynamics, and working processes in {topic_title}."),
+            (f"{topic_title}: Contextual Principles & Systemic Trade-offs",
+             f"Essential principles, relational dynamics, and operating conditions in {topic_title}."),
             (f"{topic_title}: Diagnostic Evaluation & Empirical Verification",
-             f"Systematic problem solving, distinguishing symptoms from causes, and practical verification in {topic_title}.")
+             f"Systematic problem solving, distinguishing surface effects from causes, and practical verification in {topic_title}.")
         ]
 
     # Build concepts & concept guides
@@ -322,13 +322,11 @@ def generate_curriculum_for_topic(
             "key_takeaway": f"Mastering {cname} is essential for accurate problem solving and rigorous diagnosis in {topic_title}."
         })
 
-    # Build 4 precise cognitive misconceptions
-    misconceptions = []
     misc_titles = [
-        ("Foundational Premise Inversion", "Assuming advanced operational rules apply without verifying initial baseline definitions."),
-        ("Directional Causality Trap", "Confusing active driving mechanisms with passive secondary correlations or symptoms."),
-        ("Boundary Limit Neglect", "Failing to account for critical capacity limits or non-linear behavior beyond thresholds."),
-        ("Symptom vs. Root Cause Confusion", "Addressing surface-level symptoms rather than diagnosing the underlying causal malfunction.")
+        ("Baseline Definition Inversion", "Assuming advanced rules apply without verifying initial baseline criteria and definitions."),
+        ("Directional Influence Trap", "Confusing passive secondary correlation with direct underlying causal mechanisms."),
+        ("Contextual Scope Neglect", "Failing to account for critical environmental limits or contextual boundary conditions."),
+        ("Surface Effect vs Underlying Cause", "Addressing surface-level manifestations rather than diagnosing primary underlying factors.")
     ]
     for i, (mtitle, mdesc) in enumerate(misc_titles):
         mid = f"MISC_{domain_id.upper()}_{i+1}"
@@ -1030,16 +1028,16 @@ def generate_curriculum_for_topic(
                 }
             elif c_idx == 1:
                 q_b = {
-                    "text": f"In {topic_title}, which driving mechanism regulates active dynamic processes in {c_label}?",
-                    "a": f"Direct causal pathways that govern how inputs are transformed into measurable outputs.",
-                    "b": f"Completely random fluctuations that occur without any logical or governing mechanism.",
+                    "text": f"In {topic_title}, which primary mechanism regulates active dynamic processes in {c_label}?",
+                    "a": f"Direct causal pathways that determine how inputs are transformed into measurable outputs.",
+                    "b": f"Completely random fluctuations that occur without any logical or underlying mechanism.",
                     "c": f"Passive historical correlations that exert zero active influence on ongoing operations.",
-                    "d": f"Spontaneous equilibrium states that generate infinite capacity without consuming resources.",
-                    "expl": f"{c_label} is driven by active causal mechanisms that dictate how inputs are processed into systemic outcomes."
+                    "d": f"Spontaneous states that generate infinite capacity without consuming resources.",
+                    "expl": f"{c_label} is driven by active causal mechanisms that dictate how inputs produce systemic outcomes."
                 }
                 q_c = {
                     "text": f"In {topic_title}, when analyzing {c_label}, how does altering a key input parameter impact overall system output?",
-                    "a": f"It propagates through the governing mechanism, shifting output in accordance with system sensitivity.",
+                    "a": f"It propagates through the underlying mechanism, shifting output in accordance with system sensitivity.",
                     "b": f"It produces completely random outputs that bear no relationship to the input alteration.",
                     "c": f"It has zero effect because system outputs remain completely frozen under all conditions.",
                     "d": f"It immediately resets all internal system parameters back to zero regardless of mechanism.",
@@ -1069,80 +1067,73 @@ def generate_curriculum_for_topic(
                 }
             elif c_idx == 2:
                 q_b = {
-                    "text": f"In {topic_title}, what defines the governing boundary constraints and conservation limits in {c_label}?",
-                    "a": f"Fundamental structural, conservation, or physical thresholds beyond which standard behavior degrades or alters.",
-                    "b": f"Arbitrary suggestions that have zero influence on real-world functional validity or outcomes.",
-                    "c": f"Infinite capacity bounds that permit unbounded expansion without consuming energy or resources.",
-                    "d": f"Static conventions that apply only when the subject is completely deactivated or unobserved.",
-                    "expl": f"{c_label} establishes the critical operational boundaries, conservation invariants, and threshold limits of the subject."
+                    "text": f"In {topic_title}, what defines the contextual scope and core principles in {c_label}?",
+                    "a": f"The primary conceptual rules, relational frameworks, and valid operating conditions of {topic_title}.",
+                    "b": "Arbitrary suggestions that have zero influence on real-world functional validity or outcomes.",
+                    "c": "Infinite capacity bounds that permit unbounded expansion without consuming energy or resources.",
+                    "d": "Static conventions that apply only when the subject is completely deactivated or unobserved.",
+                    "expl": f"{c_label} establishes the essential contextual scope and foundational principles of the subject."
                 }
                 q_c = {
-                    "text": f"In {topic_title}, what is the inherent trade-off when optimizing a specific parameter near its boundary limit in {c_label}?",
-                    "a": f"Maximizing one desired property typically narrows margins of safety or compromises other coupled attributes.",
-                    "b": f"Pushing performance higher automatically eliminates all friction, costs, vulnerabilities, and risks.",
-                    "c": f"Parameters operating near critical thresholds require zero oversight or continuous monitoring.",
-                    "d": f"Optimizing performance causes all external resource and energy requirements to drop to zero.",
-                    "expl": f"System trade-offs dictate that optimizing one metric toward boundary thresholds inherently stresses coupled constraints.",
-                    "prompt": f"Why does pushing a parameter toward its boundary threshold compromise coupled attributes in {c_label}?",
-                    "probe_opts": {
-                        "A": f"Because conservation laws dictate that shifting resources or capacity toward one objective diminishes reserves available for others.",
-                        "B": "Because boundary thresholds generate negative gravity that destabilizes surrounding components.",
-                        "C": "Because optimized systems lose the ability to interact with atmospheric air.",
-                        "D": "Because coupled constraints only exist in purely theoretical mathematical models."
-                    }
+                    "text": f"In {topic_title}, what important relationship emerges when evaluating complex conditions in {c_label}?",
+                    "a": f"Adjusting key parameters typically produces trade-offs that influence coupled attributes across {topic_title}.",
+                    "b": "Every parameter can be maximized simultaneously without any trade-offs or constraints.",
+                    "c": "Parameters operating in practice require zero oversight, monitoring, or verification.",
+                    "d": "All external resource and context dependencies drop to absolute zero during operations.",
+                    "expl": f"Evaluating complex conditions in {c_label} requires accounting for coupled relationships and trade-offs."
                 }
                 q_a = {
-                    "text": f"In {topic_title}, an analyst extrapolates a linear model in {c_label} far beyond its validated empirical threshold. What occurs?",
-                    "a": f"The model breaks down because non-linear saturation, threshold effects, or systemic instability take over.",
-                    "b": f"The model maintains perfect 100% predictive accuracy across all infinite parameter regimes.",
-                    "c": f"The underlying real-world phenomena reshape themselves to match the linear mathematical formula.",
-                    "d": f"All mathematical calculations automatically yield zero with zero residual error.",
-                    "expl": f"Extrapolating beyond validated boundaries in {c_label} fails because non-linear dynamics emerge past critical thresholds.",
-                    "prompt": f"Why does linear extrapolation fail beyond critical threshold boundaries in {c_label}?",
+                    "text": f"In {topic_title}, a practitioner applies principles from {c_label} to an unfamiliar complex case. What occurs?",
+                    "a": f"The analysis requires verifying contextual criteria to ensure foundational assumptions hold true.",
+                    "b": "The simplified rules automatically guarantee perfect 100% predictive accuracy across every scenario.",
+                    "c": "The real-world phenomena reshape themselves to match the simplified initial assumption.",
+                    "d": "All observed findings automatically yield zero with zero residual error.",
+                    "expl": f"Applying principles in {c_label} requires confirming that foundational assumptions apply to the context.",
+                    "prompt": f"Why must baseline assumptions be verified before applying advanced rules in {c_label}?",
                     "probe_opts": {
-                        "A": f"Because systems exhibit non-linear state transitions, saturation, or damping breakdown once threshold limits are exceeded.",
-                        "B": "Because linear equations are legally invalid in modern academic research publications.",
-                        "C": "Because physical systems expand into additional dimensions beyond threshold points.",
-                        "D": "Because threshold limits cause all mathematical variables to freeze into constants."
+                        "A": f"Because conclusions derived from flawed or unverified premises lead to invalid outcomes in {topic_title}.",
+                        "B": "Because introductory definitions are legally prohibited from being used in research.",
+                        "C": "Because real-world systems operate in higher spatial dimensions beyond standard analysis.",
+                        "D": "Because contextual rules cause all variables to freeze into mathematical zeros."
                     }
                 }
             else:  # c_idx == 3
                 q_b = {
-                    "text": f"In {topic_title}, what is the standard empirical methodology for conducting rigorous diagnostic evaluation in {c_label}?",
+                    "text": f"In {topic_title}, what methodology defines rigorous diagnostic evaluation in {c_label}?",
                     "a": f"Systematic verification of observations against baseline standards using variable isolation and corroborating evidence.",
-                    "b": f"Changing all testing conditions simultaneously without recording experimental modifications.",
-                    "c": f"Assuming that every anomalous observation is a permanent law that invalidates all prior knowledge.",
-                    "d": f"Rejecting measurable data and relying entirely on unverified personal intuition.",
+                    "b": "Changing all testing conditions simultaneously without recording experimental modifications.",
+                    "c": "Assuming that every anomalous observation is a permanent law that invalidates all prior knowledge.",
+                    "d": "Rejecting measurable data and relying entirely on unverified personal intuition.",
                     "expl": f"{c_label} relies on disciplined diagnostic evaluation: isolating variables and comparing observations against baseline benchmarks."
                 }
                 q_c = {
-                    "text": f"In {topic_title}, why is distinguishing surface symptoms from underlying root causes critical during evaluation in {c_label}?",
-                    "a": f"Because treating surface symptoms leaves the underlying causal mechanism active, leading to recurring issues.",
-                    "b": f"Because surface symptoms are always identical to the underlying root cause in every scenario.",
-                    "c": f"Because root causes resolve spontaneously as soon as superficial symptoms are addressed.",
-                    "d": f"Because diagnostic instruments can only detect root causes and cannot measure surface effects.",
-                    "expl": f"Addressing symptoms provides only temporary masking; resolving fundamental issues in {c_label} requires identifying the root cause.",
-                    "prompt": f"Why does addressing root causes produce permanent resolution compared to treating symptoms in {c_label}?",
+                    "text": f"In {topic_title}, why is distinguishing surface effects from primary underlying factors critical during evaluation in {c_label}?",
+                    "a": f"Because addressing surface manifestations leaves the underlying factor active, leading to recurring issues.",
+                    "b": "Because surface manifestations are always identical to the underlying factor in every scenario.",
+                    "c": "Because underlying factors resolve spontaneously as soon as superficial effects are noted.",
+                    "d": "Because evaluation methods can only detect underlying factors and cannot observe surface effects.",
+                    "expl": f"Addressing surface manifestations provides temporary masking; resolving fundamental issues requires identifying primary factors.",
+                    "prompt": f"Why does addressing primary underlying factors produce lasting resolution in {c_label}?",
                     "probe_opts": {
-                        "A": f"Because symptoms are secondary cascading consequences; terminating the primary causal trigger halts the entire sequence.",
-                        "B": "Because primary causes have lower magnitude than secondary observational symptoms.",
-                        "C": "Because surface symptoms always disappear automatically without intervention.",
-                        "D": "Because diagnostic protocols require root causes to be resolved before symptoms appear."
+                        "A": f"Because surface effects are secondary consequences; addressing the primary factor resolves the resulting effects.",
+                        "B": "Because primary factors have lower magnitude than secondary observational effects.",
+                        "C": "Because surface effects always disappear automatically without intervention.",
+                        "D": "Because diagnostic standards require secondary effects to be resolved in reverse alphabetical order."
                     }
                 }
                 q_a = {
                     "text": f"In {topic_title}, an investigator observes multiple conflicting anomalous indications in {c_label} simultaneously. How should they proceed?",
                     "a": f"Trace symptom dependencies back to initial triggering factors and test hypotheses sequentially through controlled isolation.",
-                    "b": f"Discard all anomalous observations immediately and declare the investigation completely resolved.",
-                    "c": f"Replace all theoretical models simultaneously without validating which assumption failed.",
-                    "d": f"Assume the observations are impossible and cease all further investigation.",
+                    "b": "Discard all anomalous observations immediately and declare the investigation completely resolved.",
+                    "c": "Replace all theoretical models simultaneously without validating which assumption failed.",
+                    "d": "Assume the observations are impossible and cease all further investigation.",
                     "expl": f"Complex investigations require tracing symptoms back to the initiating trigger and testing hypotheses one by one.",
-                    "prompt": f"Why is tracing the initiating trigger superior to addressing secondary symptoms in {c_label}?",
+                    "prompt": f"Why is tracing the initiating factor superior to addressing secondary effects in {c_label}?",
                     "probe_opts": {
-                        "A": f"Because secondary symptoms are cascading consequences of the primary fault; fixing the primary fault resolves the cascade.",
-                        "B": f"Because primary trigger events have lower severity than secondary consequence symptoms.",
-                        "C": f"Because secondary symptoms are always false readings generated by defective instruments.",
-                        "D": f"Because diagnostic standards require secondary symptoms to be resolved in reverse alphabetical order."
+                        "A": f"Because secondary manifestations are consequences of the primary factor; addressing the primary factor resolves the cascade.",
+                        "B": "Because primary trigger events have lower severity than secondary consequence effects.",
+                        "C": "Because secondary manifestations are always false readings generated by defective instruments.",
+                        "D": "Because diagnostic standards require secondary effects to be resolved in reverse alphabetical order."
                     }
                 }
 

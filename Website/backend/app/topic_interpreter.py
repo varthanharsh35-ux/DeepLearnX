@@ -215,14 +215,16 @@ def interpret_topic_scope(
         cands = [idx for idx, q in enumerate(brief.questions_raw) if not q.get("reasoning_probe") and q.get("question_type") in ["conceptual", "application"]]
         for c_idx in cands[:needed]:
             corr_txt = brief.questions_raw[c_idx]["option_a"]
+            if corr_txt.lower().startswith("because "):
+                corr_txt = corr_txt[8:]
             c_name = brief.concepts_raw[c_idx // 3]["name"] if (c_idx // 3) < len(brief.concepts_raw) else clean_title
             brief.questions_raw[c_idx]["reasoning_probe"] = {
-                "prompt": f"Why does this principle or relationship govern {c_name}?",
+                "prompt": f"Why is this foundational principle or relationship valid for {c_name}?",
                 "options": {
-                    "A": f"Because {corr_txt.rstrip('.')} under governing constraints.",
-                    "B": "Because introductory definitions can be ignored in applied contexts.",
-                    "C": "Because system variables fluctuate randomly without physical or logical rules.",
-                    "D": "Because academic standards require selecting this option regardless of facts."
+                    "A": f"Because {corr_txt.rstrip('.')}.",
+                    "B": "Because introductory definitions can be discarded once practical problems begin.",
+                    "C": "Because observational variables fluctuate randomly without underlying rules.",
+                    "D": "Because academic convention requires selecting this option regardless of facts."
                 },
                 "correct_probe": "A"
             }
@@ -1157,177 +1159,20 @@ def build_ling_curriculum(title: str, cat: str, icon: str, scope: str, arts: lis
 
 def build_general_curriculum(title: str, cat: str, icon: str, scope: str, arts: list) -> TopicKnowledgeBrief:
     """
-    General-purpose academic curriculum builder.
+    Universal multi-disciplinary curriculum builder.
     Constructs authentic concepts, misconceptions, and 12 tiered questions for any subject
     without relying on hardcoded topic branches or robotic boilerplate stems.
     """
-    # Extract terms and titles from retrieved articles if available
-    article_titles = [a["title"] for a in arts if "title" in a][:4]
-    
-    c1_title = article_titles[0] if len(article_titles) > 0 else f"{title}: Foundations & Architecture"
-    c2_title = article_titles[1] if len(article_titles) > 1 else f"{title}: Operational Dynamics & Core Mechanisms"
-    c3_title = article_titles[2] if len(article_titles) > 2 else f"{title}: System Constraints & Boundary Limits"
-    c4_title = article_titles[3] if len(article_titles) > 3 else f"{title}: Applied Evaluation & Empirical Troubleshooting"
-
-    c1_extract = arts[0]["extract"] if len(arts) > 0 else f"{title} establishes core taxonomic definitions and foundational rules."
-    c2_extract = arts[1]["extract"] if len(arts) > 1 else f"{title} mechanisms dictate dynamic interactions and functional execution."
-    c3_extract = arts[2]["extract"] if len(arts) > 2 else f"{title} constraints govern operating boundaries and stability thresholds."
-    c4_extract = arts[3]["extract"] if len(arts) > 3 else f"{title} applications require systematic diagnostics and empirical verification."
-
-    # Extract clean sentence snippets
-    s1 = c1_extract.split(".")[0].strip() + "."
-    s2 = c2_extract.split(".")[0].strip() + "."
-    s3 = c3_extract.split(".")[0].strip() + "."
-    s4 = c4_extract.split(".")[0].strip() + "."
-
-    concepts = [
-        {"id_suffix": "c1", "name": f"{title}: {c1_title}",
-         "description": f"Foundational taxonomy and structural baseline principles of {title}.",
-         "core_idea": s1,
-         "example": f"Applying foundational definitions in {title} to classify baseline instances accurately.",
-         "common_mistake": f"Confusing preliminary terminology with advanced operational mechanics in {title}.",
-         "key_takeaway": f"Mastery of {c1_title} establishes the prerequisite baseline for subsequent study."},
-        {"id_suffix": "c2", "name": f"{title}: {c2_title}",
-         "description": f"Governing causal relationships, functional flows, and mechanisms in {title}.",
-         "core_idea": s2,
-         "example": f"Tracing dynamic interactions across functional components in {title}.",
-         "common_mistake": f"Assuming passive correlation implies active causal drive in {title}.",
-         "key_takeaway": f"Understanding governing mechanisms in {c2_title} explains observed system behaviors."},
-        {"id_suffix": "c3", "name": f"{title}: {c3_title}",
-         "description": f"Operating limits, coupled trade-offs, and critical boundary thresholds in {title}.",
-         "core_idea": s3,
-         "example": f"Evaluating system trade-offs when optimizing parameters near operational boundaries in {title}.",
-         "common_mistake": f"Extrapolating linear assumptions beyond verified threshold boundaries in {title}.",
-         "key_takeaway": f"Boundary constraints define the envelope within which {title} behaves predictably."},
-        {"id_suffix": "c4", "name": f"{title}: {c4_title}",
-         "description": f"Diagnostic evaluation, error isolation, and applied problem-solving in {title}.",
-         "core_idea": s4,
-         "example": f"Systematic troubleshooting and evidence-based verification in {title}.",
-         "common_mistake": f"Treating surface symptoms while leaving underlying causal roots active in {title}.",
-         "key_takeaway": f"Rigorous evaluation in {c4_title} isolates root causes through controlled verification."}
-    ]
-
-    misconceptions = [
-        {"concept_suffix": "c1", "code": "M-GEN-01", "name": "Foundational Premise Inversion",
-         "description": f"Assuming advanced operational rules apply without verifying initial baseline definitions in {title}.",
-         "remediation": f"Review foundational definitions and taxonomic criteria in {title} before evaluating complex scenarios."},
-        {"concept_suffix": "c2", "code": "M-GEN-02", "name": "Directional Causality Trap",
-         "description": f"Confusing active driving mechanisms with passive secondary symptoms in {title}.",
-         "remediation": f"Distinguish driving causal inputs from consequential outputs when analyzing mechanisms in {title}."},
-        {"concept_suffix": "c3", "code": "M-GEN-03", "name": "Boundary Limit Neglect",
-         "description": f"Assuming linear system behavior beyond critical capacity thresholds and safety constraints in {title}.",
-         "remediation": f"Account for non-linear state transitions and threshold saturation when parameters approach operating boundaries in {title}."},
-        {"concept_suffix": "c4", "code": "M-GEN-04", "name": "Symptom vs. Root Cause Confusion",
-         "description": f"Addressing surface-level symptoms rather than diagnosing the underlying causal malfunction in {title}.",
-         "remediation": f"Isolate the root causal mechanism through controlled hypothesis testing rather than masking superficial symptoms in {title}."}
-    ]
-
-    questions = [
-        {"concept_suffix": "c1", "question_type": "basic", "difficulty": "easy",
-         "question_text": f"In {title}, which core premise establishes the foundational taxonomic framework of {c1_title}?",
-         "option_a": f"The standard academic definition: {s1.rstrip('.')}.",
-         "option_b": f"An unverified arbitrary assumption that contradicts empirical baseline evidence.",
-         "option_c": f"A temporary hypothesis that only applies during laboratory calibration exercises.",
-         "option_d": f"A commercial convention that changes completely across different geographic regions.",
-         "correct_option": "A", "explanation": f"The foundational framework is anchored in verified principles: {s1}"},
-        {"concept_suffix": "c1", "question_type": "conceptual", "difficulty": "medium",
-         "question_text": f"Why is establishing clear baseline taxonomy essential before conducting advanced analysis in {title}?",
-         "option_a": f"Because accurate classification defines the operational boundaries and properties of the subject under study.",
-         "option_b": f"Because baseline terminology eliminates the requirement for mathematical calculations.",
-         "option_c": f"Because advanced models cannot function unless all technical vocabulary is eliminated.",
-         "option_d": f"Because academic journals legally prohibit studying subjects without fixed Latin names.",
-         "correct_option": "A", "explanation": f"Precise taxonomy establishes the necessary conceptual framework for investigating {title}."},
-        {"concept_suffix": "c1", "question_type": "application", "difficulty": "hard",
-         "question_text": f"An investigator begins an analysis of {title} without verifying baseline definitions. What primary error results?",
-         "option_a": f"The investigator conflates distinct phenomena, producing invalid conclusions derived from flawed premises.",
-         "option_b": f"The analytical model automatically achieves perfect accuracy across all parameter regimes.",
-         "option_c": f"The experimental apparatus experiences immediate physical mechanical breakdown.",
-         "option_d": "All measurable data points automatically converge to zero with zero residual error.",
-         "correct_option": "A", "explanation": f"Failing to establish baseline criteria leads to category errors and unsound conclusions in {title}."},
-        {"concept_suffix": "c2", "question_type": "basic", "difficulty": "easy",
-         "question_text": f"Which governing relationship characterizes the primary operational dynamics of {c2_title} in {title}?",
-         "option_a": f"The core functional flow: {s2.rstrip('.')}.",
-         "option_b": f"A reverse causal sequence where outcomes generate their own initiating causes.",
-         "option_c": f"A static state where components remain completely isolated without energy transfer.",
-         "option_d": f"A chaotic condition where physical laws fluctuate randomly every sixty seconds.",
-         "correct_option": "A", "explanation": f"Operational dynamics reflect established causal principles: {s2}"},
-        {"concept_suffix": "c2", "question_type": "conceptual", "difficulty": "medium",
-         "question_text": f"In {title}, how do governing mechanisms maintain stability under fluctuating operational conditions?",
-         "option_a": f"Through dynamic feedback regulation that counteracts disturbances to preserve system equilibrium.",
-         "option_b": f"By shutting down all energy transfer and becoming completely inert.",
-         "option_c": f"By amplifying every random disturbance until the system undergoes state collapse.",
-         "option_d": f"By altering underlying mathematical constants to match external changes.",
-         "correct_option": "A", "explanation": f"System stability relies on feedback loops that restore equilibrium when conditions vary in {title}."},
-        {"concept_suffix": "c2", "question_type": "application", "difficulty": "hard",
-         "question_text": f"A practitioner evaluates a malfunctioning process in {title} where input variables fluctuate widely. How to restore stability?",
-         "option_a": f"Dampen input oscillations and calibrate feedback response rates to match system operational latency.",
-         "option_b": f"Double the input variance to force the system into accelerated transition states.",
-         "option_c": f"Disconnect all monitoring instruments and assume equilibrium will restore spontaneously.",
-         "option_d": f"Replace all physical components simultaneously without diagnosing which connection failed.",
-         "correct_option": "A", "explanation": f"Restoring stability requires regulating input variance and synchronizing feedback controls in {title}."},
-        {"concept_suffix": "c3", "question_type": "basic", "difficulty": "easy",
-         "question_text": f"What defines the governing boundary constraints and operating envelope in {c3_title} for {title}?",
-         "option_a": f"Physical, conservation, or logical thresholds beyond which standard behavior degrades or alters.",
-         "option_b": f"Infinite capacity limits that permit unbounded throughput without resource consumption.",
-         "option_c": f"Subjective preferences that can be altered freely during operational stress.",
-         "option_d": f"Temporary guidelines that disappear whenever system workload reaches maximum levels.",
-         "correct_option": "A", "explanation": f"Boundary constraints define the operational thresholds within which {title} behaves predictably."},
-        {"concept_suffix": "c3", "question_type": "conceptual", "difficulty": "medium",
-         "question_text": f"In {title}, what unavoidable trade-off emerges when pushing a system parameter close to its critical boundary threshold?",
-         "option_a": f"Maximizing one performance metric typically compromises safety margins or stresses coupled attributes.",
-         "option_b": f"Operating near critical limits eliminates all risk, friction, and maintenance overhead.",
-         "option_c": f"System components require zero monitoring or oversight when pushed to maximum capacity.",
-         "option_d": f"External resource and energy requirements drop to absolute zero at threshold boundaries.",
-         "correct_option": "A", "explanation": f"Coupled constraints mean that maximizing performance near limits increases vulnerability in {title}."},
-        {"concept_suffix": "c3", "question_type": "application", "difficulty": "hard",
-         "question_text": f"An engineer extrapolates a linear model in {title} far beyond its empirically validated threshold boundary. What occurs?",
-         "option_a": f"The linear model fails because non-linear saturation, damping limits, or instability emerge beyond thresholds.",
-         "option_b": f"The linear model maintains 100% predictive accuracy across all infinite parameter regimes.",
-         "option_c": f"The real-world phenomena reshape themselves to conform to the simplified linear equation.",
-         "option_d": f"All mathematical calculations automatically yield zero with zero residual error.",
-         "correct_option": "A", "explanation": f"Extrapolating beyond verified boundaries fails because non-linear transitions occur past critical limits.",
-         "reasoning_probe": {
-             "prompt": f"Why does linear extrapolation fail beyond critical threshold boundaries in {title}?",
-             "options": {
-                 "A": f"Because systems exhibit non-linear state transitions, saturation, or damping breakdown once threshold limits are exceeded.",
-                 "B": f"Because linear equations are legally invalid in modern academic research publications.",
-                 "C": f"Because physical systems expand into additional spatial dimensions beyond threshold points.",
-                 "D": f"Because threshold limits cause all mathematical variables to freeze into constants."
-             }, "correct_probe": "A"
-         }},
-        {"concept_suffix": "c4", "question_type": "basic", "difficulty": "easy",
-         "question_text": f"What methodology defines rigorous diagnostic evaluation and troubleshooting in {c4_title} for {title}?",
-         "option_a": f"Systematic verification of observations against baselines using variable isolation and corroborating evidence.",
-         "option_b": f"Modifying all testing parameters simultaneously without recording incremental changes.",
-         "option_c": f"Assuming that every anomalous reading invalidates all established scientific principles.",
-         "option_d": f"Discarding measurable data and relying exclusively on unverified personal intuition.",
-         "correct_option": "A", "explanation": f"Rigorous diagnostics in {title} require controlled isolation of variables against validated baselines."},
-        {"concept_suffix": "c4", "question_type": "conceptual", "difficulty": "medium",
-         "question_text": f"Why is separating surface symptoms from root causes critical during troubleshooting in {title}?",
-         "option_a": f"Because treating symptoms masks the problem temporarily while leaving the underlying causal defect active.",
-         "option_b": f"Because surface symptoms are always identical to the root cause in every technical system.",
-         "option_c": f"Because root causes resolve spontaneously as soon as superficial symptoms are treated.",
-         "option_d": f"Because diagnostic instruments are incapable of detecting secondary surface effects.",
-         "correct_option": "A", "explanation": f"Lasting solutions require curing root causes rather than treating superficial symptoms in {title}."},
-        {"concept_suffix": "c4", "question_type": "application", "difficulty": "hard",
-         "question_text": f"In {title}, an investigator detects multiple conflicting anomalous indications simultaneously. How should they proceed?",
-         "option_a": f"Trace symptom dependencies back to initiating triggers and test hypotheses sequentially through controlled isolation.",
-         "option_b": f"Discard all anomalous observations immediately and declare the system fully operational.",
-         "option_c": f"Replace all theoretical models simultaneously without validating which assumption failed.",
-         "option_d": f"Assume the observations are physically impossible and terminate the investigation.",
-         "correct_option": "A", "explanation": f"Complex troubleshooting requires tracing dependency cascades back to primary triggers in {title}.",
-         "reasoning_probe": {
-             "prompt": f"Why is tracing the initiating trigger superior to addressing secondary symptoms in {title}?",
-             "options": {
-                 "A": f"Because secondary symptoms are cascading consequences of the primary fault; resolving the primary fault cures the cascade.",
-                 "B": f"Because primary trigger events have lower severity than secondary consequence symptoms.",
-                 "C": "Because secondary symptoms are always false readings generated by defective instruments.",
-                 "D": f"Because diagnostic protocols require root causes to be resolved before symptoms appear."
-             }, "correct_probe": "A"
-         }}
-    ]
-
-    return TopicKnowledgeBrief(title, cat, icon, scope, concepts, misconceptions, questions)
+    try:
+        from backend.app.universal_synthesizer import synthesize_universal_curriculum
+    except ImportError:
+        try:
+            from app.universal_synthesizer import synthesize_universal_curriculum
+        except ImportError:
+            from universal_synthesizer import synthesize_universal_curriculum
+            
+    concepts, misconceptions, questions, guides, u_icon, u_cat = synthesize_universal_curriculum("gen_domain", title, arts)
+    return TopicKnowledgeBrief(title, u_cat or cat, u_icon or icon, scope, concepts, misconceptions, questions)
 
 
 # Map discipline codes to dedicated pedagogical builders
