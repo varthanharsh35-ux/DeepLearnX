@@ -163,7 +163,9 @@ def synthesize_authentic_curriculum(
     domain_id: str,
     topic_title: str,
     articles: List[Dict[str, str]] = None,
-    num_questions: int = 12
+    num_questions: int = 12,
+    dag_type: Optional[str] = None,
+    seed_offset: int = 0
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], str, str]:
     """
     Synthesizes authentic concepts, misconceptions, and tiered diagnostic questions
@@ -185,7 +187,14 @@ def synthesize_authentic_curriculum(
         except Exception:
             articles = []
 
-    return synthesize_universal_curriculum(domain_id, topic_title, articles=articles, num_questions=num_questions)
+    return synthesize_universal_curriculum(
+        domain_id,
+        topic_title,
+        articles=articles,
+        num_questions=num_questions,
+        dag_type=dag_type,
+        seed_offset=seed_offset
+    )
 
 def build_curriculum_from_articles(
     domain_id: str,

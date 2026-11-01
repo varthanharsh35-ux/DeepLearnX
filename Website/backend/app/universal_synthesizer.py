@@ -39,7 +39,9 @@ def detect_topic_metadata(topic_title: str, articles: List[Dict[str, str]] = Non
     art_text = " ".join((a.get("title", "") + " " + a.get("extract", "")).lower() for a in (articles or []))
     combined = f"{t_low} {art_text}"
 
-    if any(k in combined for k in ["french verb", "conjugation", "grammar", "phonology", "linguistic", "particle"]):
+    if any(k in combined for k in ["french leader", "napoleon", "gothic cathedral", "vaulting", "revolution"]):
+        return "🏛️", "History & Architectural Heritage", "history"
+    elif any(k in combined for k in ["french verb", "conjugation", "grammar", "phonology", "linguistic", "particle"]):
         return "🗣️", "Linguistics & Language Studies", "linguistics"
     elif any(k in combined for k in ["copyright", "constitution", "geneva convention", "war crime", "immunity", "jurisprudence", "legal"]):
         return "⚖️", "Legal Systems & Jurisprudence", "law"
@@ -49,7 +51,7 @@ def detect_topic_metadata(topic_title: str, articles: List[Dict[str, str]] = Non
         return "📈", "Economics & Market Dynamics", "economics"
     elif any(k in combined for k in ["pastry", "choux", "culinary", "baking", "gastronomy"]):
         return "🥐", "Culinary Arts & Gastronomy", "culinary"
-    elif any(k in combined for k in ["french leaders", "gothic cathedral", "history", "vaulting", "architecture"]):
+    elif any(k in combined for k in ["history", "architecture"]):
         return "🏛️", "History & Architectural Heritage", "history"
     elif any(k in combined for k in ["exoplanet", "astronomy", "moon phase", "astrophysics", "stellar"]):
         return "🔭", "Astronomy & Astrophysics", "astronomy"
@@ -81,7 +83,12 @@ def detect_archetype(topic_title: str, articles: List[Dict[str, str]] = None) ->
     return key, {"icon": icon, "category": cat}
 
 
-def synthesize_dynamic_knowledge_brief(topic_title: str, domain_id: str, articles: List[Dict[str, str]] = None) -> Dict[str, Any]:
+def synthesize_dynamic_knowledge_brief(
+    topic_title: str,
+    domain_id: str,
+    articles: List[Dict[str, str]] = None,
+    dag_type: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Constructs a topic-authentic Knowledge Brief and non-linear DAG with branching and merging dependencies.
     """
@@ -293,21 +300,93 @@ def synthesize_dynamic_knowledge_brief(topic_title: str, domain_id: str, article
             f"Practitioners in {clean_title} evaluate observable evidence to troubleshoot complex scenarios."
         ]
 
-        # Dynamic Non-Linear Diamond DAG
-        concepts_def = [
-            (f"{clean_title}: Foundational Principles & Core Taxonomy",
-             f"Baseline definitions, historical origins, core vocabulary, and foundational taxonomy of {clean_title}.",
-             []),
-            (f"{clean_title}: Primary Working Dynamics & Operational Mechanisms",
-             f"Central causal dynamics, governing relationships, and theoretical mechanisms driving outcomes in {clean_title}.",
-             [0]),
-            (f"{clean_title}: Contextual Constraints & Boundary Conditions",
-             f"Environmental boundaries, qualifying conditions, and operational limits that govern {clean_title}.",
-             [0]),
-            (f"{clean_title}: Applied Problem-Solving & Diagnostic Synthesis",
-             f"Synthesizing principles to diagnose realistic scenarios, evaluate evidence, and solve practical challenges in {clean_title}.",
-             [1, 2])
-        ]
+        # Determine dynamic pedagogical DAG topology
+        dag_topology = detect_dag_topology(clean_title, category, explicit_type=dag_type)
+
+        if dag_topology == "linear":
+            # Sequential DAG: c1 -> c2 -> c3 -> c4
+            concepts_def = [
+                (f"{clean_title}: Foundational Principles & Baseline Setup",
+                 f"Introductory principles, essential definitions, baseline terminology, and initial setup criteria for {clean_title}.",
+                 []),
+                (f"{clean_title}: Intermediate Processing & Transformation Mechanisms",
+                 f"Core transformational stages, sequential workflow, and operational intermediate dynamics in {clean_title}.",
+                 [0]),
+                (f"{clean_title}: Advanced Execution & Boundary Constraints",
+                 f"Execution parameters, qualifying conditions, and boundary constraints governing operational progress in {clean_title}.",
+                 [1]),
+                (f"{clean_title}: Terminal Verification & System Synthesis",
+                 f"End-to-end integration, performance verification, and diagnostic problem synthesis for {clean_title}.",
+                 [2])
+            ]
+        elif dag_topology == "multi_root":
+            # Multi-Root Merging DAG: c1 and c2 independent roots -> c3 (merged synthesis) -> c4 (applied capstone)
+            concepts_def = [
+                (f"{clean_title}: Theoretical Foundation A (Core Construct)",
+                 f"Foundational theoretical constructs, formal axioms, and primary taxonomy underpinning {clean_title}.",
+                 []),
+                (f"{clean_title}: Methodological Foundation B (Analytical Framework)",
+                 f"Complementary empirical methods, measurement frameworks, and baseline quantitative criteria for {clean_title}.",
+                 []),
+                (f"{clean_title}: Interdisciplinary Synthesis & Coupled Dynamics",
+                 f"Synthesizing both foundational pillars to model integrated causal interactions in {clean_title}.",
+                 [0, 1]),
+                (f"{clean_title}: Integrated Field Application & Diagnostic Troubleshooting",
+                 f"Diagnosing complex multi-variable scenarios and applying unified principles of {clean_title}.",
+                 [2])
+            ]
+        elif dag_topology == "branching":
+            # Branching Tree DAG: c1 foundational root -> c2, c3, c4 independent branches
+            concepts_def = [
+                (f"{clean_title}: Core Taxonomy & Shared Foundational Principles",
+                 f"Universal baseline definitions, shared mechanisms, and foundational taxonomy across {clean_title}.",
+                 []),
+                (f"{clean_title}: Primary Classification & Structural Dynamics",
+                 f"First distinct branch: specific architectural features, primary typology, and operational behavior in {clean_title}.",
+                 [0]),
+                (f"{clean_title}: Alternative Typology & Operational Bounds",
+                 f"Second distinct branch: specialized variants, alternative implementations, and domain constraints.",
+                 [0]),
+                (f"{clean_title}: Comparative Synthesis & Domain Applications",
+                 f"Third distinct branch: cross-cutting trade-offs, edge-case evaluation, and practical selection criteria.",
+                 [0])
+            ]
+        elif dag_topology == "expanded_5node":
+            # 5-Node Hybrid DAG: 2 roots (c1, c2) -> c3; c1 -> c4; {c3, c4} -> c5
+            concepts_def = [
+                (f"{clean_title}: Primary Conceptual Framework",
+                 f"Foundational principles and initial taxonomy of {clean_title}.",
+                 []),
+                (f"{clean_title}: Auxiliary Quantitative Tools",
+                 f"Analytical tools, metrics, and empirical baseline instruments for {clean_title}.",
+                 []),
+                (f"{clean_title}: Core Operational Mechanisms",
+                 f"Causal dynamics arising from theoretical inputs in {clean_title}.",
+                 [0, 1]),
+                (f"{clean_title}: Environmental & Boundary Constraints",
+                 f"Domain boundaries and external constraints governing {clean_title}.",
+                 [0]),
+                (f"{clean_title}: Integrated Problem-Solving & Case Analysis",
+                 f"Synthesizing operational mechanisms and boundary constraints to resolve realistic scenarios in {clean_title}.",
+                 [2, 3])
+            ]
+        else:
+            # Default: Diamond DAG (c1 -> c2, c3 -> c4)
+            concepts_def = [
+                (f"{clean_title}: Foundational Principles & Core Taxonomy",
+                 f"Baseline definitions, historical origins, core vocabulary, and foundational taxonomy of {clean_title}.",
+                 []),
+                (f"{clean_title}: Primary Working Dynamics & Operational Mechanisms",
+                 f"Central causal dynamics, governing relationships, and theoretical mechanisms driving outcomes in {clean_title}.",
+                 [0]),
+                (f"{clean_title}: Contextual Constraints & Boundary Conditions",
+                 f"Environmental boundaries, qualifying conditions, and operational limits that govern {clean_title}.",
+                 [0]),
+                (f"{clean_title}: Applied Problem-Solving & Diagnostic Synthesis",
+                 f"Synthesizing principles to diagnose realistic scenarios, evaluate evidence, and solve practical challenges in {clean_title}.",
+                 [1, 2])
+            ]
+
         misconceptions_def = [
             (f"{clean_title} Precondition Omission Fallacy",
              f"Applying advanced analytical rules in {clean_title} without first confirming that baseline definitions and entry criteria are satisfied.",
@@ -377,10 +456,39 @@ def synthesize_dynamic_knowledge_brief(topic_title: str, domain_id: str, article
     }
 
 
+def detect_dag_topology(topic_title: str, category: str, explicit_type: Optional[str] = None) -> str:
+    """
+    Detects the pedagogical DAG topology appropriate for the topic.
+    Returns: 'linear', 'branching', 'multi_root', 'diamond', or 'expanded_5node'.
+    """
+    if explicit_type in ("linear", "branching", "multi_root", "diamond", "expanded_5node"):
+        return explicit_type
+
+    t_low = topic_title.lower()
+
+    # 1. Multi-Root Merging DAG: Interdisciplinary or hybrid topics joining two independent foundations
+    if any(k in t_low for k in ["bioinformatics", "quantum computing", "mechatronics", "neuroeconomics", "sn1 vs sn2", "law and economics", "biophysics"]):
+        return "multi_root"
+    elif " and " in t_low and any(k in t_low for k in ["society", "ethics", "policy", "computation", "economics", "law"]):
+        return "multi_root"
+
+    # 2. Sequential / Linear DAG: Chronological, phased, algorithmic, or pipeline topics
+    elif any(k in t_low for k in ["pipeline", "compiler", "revolution", "evolution", "chronology", "process", "workflow", "lifecycle", "stages", "step", "algorithm", "journey", "timeline", "history of"]):
+        return "linear"
+
+    # 3. Branching Tree DAG: Taxonomic, categorical, classification topics
+    elif any(k in t_low for k in ["types of", "taxonomy", "classification", "architecture", "structures", "categories", "families", "methods", "varieties", "subfields"]):
+        return "branching"
+
+    # 4. Default: Diamond DAG (Foundational theory -> parallel aspects -> capstone synthesis)
+    return "diamond"
+
+
 def synthesize_universal_questions(
     domain_id: str,
     brief: Dict[str, Any],
-    num_questions: int = 12
+    num_questions: int = 12,
+    seed_offset: int = 0
 ) -> List[Dict[str, Any]]:
     """
     Synthesizes questions matching introductory cognitive distribution:
@@ -388,24 +496,25 @@ def synthesize_universal_questions(
     - 33% Conceptual Understanding (e.g. 4 of 12)
     - 17% Simple Application (e.g. 2 of 12)
     Dynamically places 3 to 4 Reasoning Probes across conceptual and application tiers.
+    Applies multi-pattern authoring so repeated runs produce diverse question stems and scenarios.
     """
     topic = brief["title"]
     concepts = brief["concepts"]
     misconceptions = brief["misconceptions"]
     facts = brief.get("sample_facts", [])
 
-    # Distribution: 6 basic, 4 conceptual, 2 application
-    tier_plan = ["basic"] * 6 + ["conceptual"] * 4 + ["application"] * 2
-    # If custom num_questions differs, adjust distribution
-    if num_questions != 12:
-        nb = max(2, int(num_questions * 0.50))
-        nc = max(2, int(num_questions * 0.33))
-        na = max(1, num_questions - nb - nc)
-        tier_plan = ["basic"] * nb + ["conceptual"] * nc + ["application"] * na
+    # Distribution: ~50% basic, ~33% conceptual, ~17% application
+    nb = max(2, int(num_questions * 0.50))
+    nc = max(2, int(num_questions * 0.33))
+    na = max(1, num_questions - nb - nc)
+    tier_plan = ["basic"] * nb + ["conceptual"] * nc + ["application"] * na
 
     # Select 4 probe questions dynamically from conceptual and application questions (non-fixed placement)
     potential_probe_indices = [idx for idx, t in enumerate(tier_plan) if t in ("conceptual", "application")]
     selected_probe_indices = set(random.sample(potential_probe_indices, min(4, len(potential_probe_indices))))
+
+    # Compute pattern offset from domain_id and seed_offset to guarantee distinct stems across runs
+    base_pattern_offset = (abs(hash(domain_id)) + seed_offset) % 4
 
     questions = []
     for idx, q_tier in enumerate(tier_plan):
@@ -415,9 +524,10 @@ def synthesize_universal_questions(
         mid = misconceptions[c_idx % len(misconceptions)]["id"]
 
         q_has_probe = (idx in selected_probe_indices)
-        q_data = generate_question_item(topic, c_obj, brief["category"], q_tier, idx, facts, q_has_probe)
+        pattern_idx = (base_pattern_offset + idx) % 4
+        q_data = generate_question_item(topic, c_obj, brief["category"], q_tier, idx, facts, q_has_probe, pattern_idx)
 
-        # Shuffle options
+        # Shuffle options while preserving answer key tracking
         orig_options = q_data["options"]
         orig_corr = q_data["correct"]
         corr_text = orig_options[orig_corr]
@@ -474,30 +584,99 @@ def generate_question_item(
     tier: str,
     q_idx: int,
     facts: List[str],
-    has_probe: bool
+    has_probe: bool,
+    pattern_idx: int = 0
 ) -> Dict[str, Any]:
-    """Generates authentic questions tailored to the topic and tier without generic engineering filler."""
+    """Generates authentic questions with multiple diverse question patterns, scenarios, and options per tier."""
     c_name = concept["name"]
     fact_anchor = facts[q_idx % len(facts)] if facts else f"{topic} is structured upon verified principles."
 
     if tier == "basic":
-        return {
-            "text": f"In the study of {topic}, which statement accurately defines the core scope of '{c_name}'?",
-            "options": {
+        # 4 distinct question patterns for Basic tier
+        if pattern_idx == 0:
+            text = f"In the study of {topic}, which statement accurately defines the scope and taxonomy of '{c_name}'?"
+            opts = {
                 "A": f"It establishes the fundamental taxonomy, definitions, and essential baseline criteria governing {c_name}.",
                 "B": f"It describes an unrelated secondary procedure that operates completely outside the boundaries of {topic}.",
                 "C": f"It serves solely as an informal conversational colloquialism without recognized status in {topic}.",
                 "D": f"It represents an outdated historical misconception that has been completely discredited in {topic}."
-            },
+            }
+        elif pattern_idx == 1:
+            text = f"What is the primary operational objective associated with '{c_name}' within the framework of {topic}?"
+            opts = {
+                "A": f"It establishes the key structural mechanisms and essential requirements necessary to analyze {c_name}.",
+                "B": f"It arbitrarily overrides standard foundational rules without empirical verification or documentation in {topic}.",
+                "C": f"It eliminates all prerequisite requirements and replaces systematic analysis with informal estimation.",
+                "D": f"It functions solely to introduce cosmetic terminology without affecting the functional behavior of {topic}."
+            }
+        elif pattern_idx == 2:
+            text = f"Which foundational condition or baseline criterion must be established when evaluating '{c_name}' in {topic}?"
+            opts = {
+                "A": f"Confirming that prerequisite definitions and foundational parameters are satisfied before evaluating {c_name}.",
+                "B": f"Assuming that peripheral observations automatically guarantee baseline compliance without testing.",
+                "C": f"Disregarding operational bounds and proceeding under the assumption that conditions remain invariant.",
+                "D": f"Restricting analysis strictly to isolated edge cases while ignoring standard governing rules in {topic}."
+            }
+        else:
+            text = f"Which fundamental characteristic clearly distinguishes '{c_name}' from secondary mechanisms in {topic}?"
+            opts = {
+                "A": f"Its direct alignment with verified causal structures and rigorous foundational criteria in {topic}.",
+                "B": f"Its reliance on unverified anecdotal correlations rather than reproducible empirical principles.",
+                "C": f"Its complete independence from any established mathematical or theoretical frameworks in {topic}.",
+                "D": f"Its tendency to reverse core terminology and contradict foundational definitions verified across {topic}."
+            }
+
+        return {
+            "text": text,
+            "options": opts,
             "correct": "A",
             "explanation": f"Understanding '{c_name}' begins with establishing its formal definitions and baseline criteria within {topic}.",
             "reasoning_probe": None
         }
+
     elif tier == "conceptual":
+        # 4 distinct question patterns for Conceptual tier
+        if pattern_idx == 0:
+            text = f"When analyzing {topic}, how does the conceptual mechanism of '{c_name}' interact with broader governing rules?"
+            opts = {
+                "A": f"It links fundamental criteria to operational dynamics through established causal pathways in {topic}.",
+                "B": f"It acts in complete isolation without influencing or being influenced by related concepts in {topic}.",
+                "C": f"It reverses established terminology and contradicts foundational definitions previously verified.",
+                "D": f"It substitutes subjective speculation in place of empirical evidence and standard rules in {topic}."
+            }
+            probe_prompt = f"Which underlying principle or mechanism justifies why '{c_name}' functions this way in {topic}?"
+        elif pattern_idx == 1:
+            text = f"Why does shifting key operational parameters within '{c_name}' alter observable outcomes across {topic}?"
+            opts = {
+                "A": f"Because dynamic governing relationships systematically propagate parameter changes to downstream outcomes in {topic}.",
+                "B": f"Because observable variables fluctuate randomly without underlying deterministic rules in {topic}.",
+                "C": f"Because changes within {c_name} are immediately neutralized by unrelated external factors.",
+                "D": f"Because operational parameters have zero measurable influence on real-world behavior in {topic}."
+            }
+            probe_prompt = f"Which formal domain rule dictates how parameter adjustments in '{c_name}' affect system stability in {topic}?"
+        elif pattern_idx == 2:
+            text = f"Under which specific circumstances do standard assumptions regarding '{c_name}' break down in {topic}?"
+            opts = {
+                "A": f"When operating boundary limits or threshold constraints are exceeded, triggering coupled non-linear trade-offs.",
+                "B": f"When researchers apply established scientific principles rather than relying on unverified intuition.",
+                "C": f"Whenever observational measurements are recorded under carefully controlled baseline conditions.",
+                "D": f"Only when external regulatory bodies mandate that theoretical rules be temporarily suspended."
+            }
+            probe_prompt = f"What theoretical mechanism directly accounts for failure modes when boundaries are exceeded in '{c_name}'?"
+        else:
+            text = f"How does the theoretical framework of '{c_name}' account for observed behavior during {topic} evaluation?"
+            opts = {
+                "A": f"By modeling the direct causal mechanisms that connect verified inputs to reproducible results in {topic}.",
+                "B": f"By assuming that all observed variations are trivial anomalies that can be safely ignored in {topic}.",
+                "C": f"By treating unrelated secondary symptoms as if they were the primary driving mechanism of the system.",
+                "D": f"By forcing empirical observations to match preconceived hypotheses regardless of contrary evidence."
+            }
+            probe_prompt = f"Why is this specific causal model necessary to maintain descriptive validity for '{c_name}' in {topic}?"
+
         rp = None
         if has_probe:
             rp = {
-                "prompt": f"Which underlying principle or mechanism justifies why '{c_name}' functions this way in {topic}?",
+                "prompt": probe_prompt,
                 "options": {
                     "A": f"The governing relationship connects foundational premises directly to observable outcomes in {topic}.",
                     "B": f"The phenomenon occurs strictly as a random coincidence without any deterministic principle in {topic}.",
@@ -506,23 +685,58 @@ def generate_question_item(
                 },
                 "correct_probe": "A"
             }
+
         return {
-            "text": f"When analyzing {topic}, how does the conceptual mechanism of '{c_name}' interact with broader principles?",
-            "options": {
-                "A": f"It links fundamental criteria to operational dynamics through established causal pathways in {topic}.",
-                "B": f"It acts in complete isolation without influencing or being influenced by related concepts in {topic}.",
-                "C": f"It reverses established terminology and contradicts foundational definitions previously verified.",
-                "D": f"It substitutes subjective speculation in place of empirical evidence and standard rules in {topic}."
-            },
+            "text": text,
+            "options": opts,
             "correct": "A",
             "explanation": f"In {topic}, '{c_name}' operates through consistent conceptual dynamics linking premises to outcomes.",
             "reasoning_probe": rp
         }
+
     else:  # application
+        # 4 distinct question patterns for Application tier
+        if pattern_idx == 0:
+            text = f"A practitioner working in {topic} observes unexpected anomalous results when applying '{c_name}'. What is the most effective diagnostic response?"
+            opts = {
+                "A": f"Systematically verify baseline conditions, isolate interacting factors, and apply corrective procedures grounded in {topic}.",
+                "B": f"Disregard the anomalous observations completely and proceed as if operating under standard nominal parameters.",
+                "C": f"Arbitrarily modify unrelated variables without documenting changes or tracing their impact on {topic}.",
+                "D": f"Abandon all foundational rules and rely exclusively on unverified guesswork to complete the task."
+            }
+            probe_prompt = f"Why does this corrective diagnostic action resolve the anomaly encountered in '{c_name}'?"
+        elif pattern_idx == 1:
+            text = f"During an applied implementation of '{c_name}' in {topic}, an analyst encounters severe system instability. What action restores nominal operation?"
+            opts = {
+                "A": f"Calibrate operating parameters back within validated boundary limits while continuously monitoring core causal indicators.",
+                "B": f"Double the operating load immediately in an effort to overpower the detected system instability.",
+                "C": f"Disable all monitoring sensors and assume the instability will resolve itself without intervention.",
+                "D": f"Introduce contradictory secondary variables without controlling for primary inputs in {topic}."
+            }
+            probe_prompt = f"Which physiological or mechanical principle explains why parameter calibration stabilizes '{c_name}'?"
+        elif pattern_idx == 2:
+            text = f"Faced with competing design or operational constraints in '{c_name}', how should an expert optimize performance in {topic}?"
+            opts = {
+                "A": f"Balance trade-offs methodically by evaluating quantitative sensitivity and adhering to validated domain guidelines.",
+                "B": f"Optimize for a single cosmetic metric while allowing core structural constraints to fail completely.",
+                "C": f"Select random configuration settings and terminate testing after the first successful observation.",
+                "D": f"Delegate optimization decisions to unverified automated scripts without verifying output validity."
+            }
+            probe_prompt = f"Why is multi-variable sensitivity analysis required when balancing competing constraints in '{c_name}'?"
+        else:
+            text = f"When troubleshooting a failure scenario in '{c_name}', two competing explanations are proposed. How should the team determine the true cause in {topic}?"
+            opts = {
+                "A": f"Conduct controlled isolation experiments to test which mechanism specifically reproduces the failure mode.",
+                "B": f"Adopt whichever explanation requires the least amount of experimental verification or documentation.",
+                "C": f"Assume both competing explanations are simultaneously correct regardless of physical contradictions.",
+                "D": f"Accept the explanation favored by the most senior team member without reviewing empirical data."
+            }
+            probe_prompt = f"Why does controlled mechanism isolation provide definitive proof of root causality in '{c_name}'?"
+
         rp = None
         if has_probe:
             rp = {
-                "prompt": f"Why does this corrective diagnostic action resolve the anomaly encountered in '{c_name}'?",
+                "prompt": probe_prompt,
                 "options": {
                     "A": f"It addresses the underlying root cause by restoring proper governing conditions established for {topic}.",
                     "B": f"It merely masks superficial symptoms temporarily without fixing the primary causal defect.",
@@ -531,14 +745,10 @@ def generate_question_item(
                 },
                 "correct_probe": "A"
             }
+
         return {
-            "text": f"A practitioner working in {topic} observes unexpected anomalous results when applying '{c_name}'. What is the most effective diagnostic response?",
-            "options": {
-                "A": f"Systematically verify baseline conditions, isolate interacting factors, and apply corrective procedures grounded in {topic}.",
-                "B": f"Disregard the anomalous observations completely and proceed as if operating under standard nominal parameters.",
-                "C": f"Arbitrarily modify unrelated variables without documenting changes or tracing their impact on {topic}.",
-                "D": f"Abandon all foundational rules and rely exclusively on unverified guesswork to complete the task."
-            },
+            "text": text,
+            "options": opts,
             "correct": "A",
             "explanation": f"Effective problem solving in {topic} requires systematic isolation of root causes and adherence to validated principles.",
             "reasoning_probe": rp
@@ -549,29 +759,32 @@ def synthesize_universal_curriculum(
     domain_id: str,
     topic_title: str,
     articles: List[Dict[str, str]] = None,
-    num_questions: int = 12
+    num_questions: int = 12,
+    dag_type: Optional[str] = None,
+    seed_offset: int = 0
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], str, str]:
     """
     Master universal entry point for curriculum synthesis.
-    Validates the dynamic DAG, generates tiered questions, and enforces quality constraints.
+    Validates the dynamic DAG (linear, branching, multi_root, diamond),
+    generates tiered questions with pattern diversity, and enforces quality constraints.
     """
     clean_title = normalize_topic_title(topic_title.strip())
 
-    # 1. Synthesize topic brief, concepts with diamond DAG, and misconceptions
-    brief = synthesize_dynamic_knowledge_brief(clean_title, domain_id, articles)
+    # 1. Synthesize topic brief, concepts with dynamic DAG, and misconceptions
+    brief = synthesize_dynamic_knowledge_brief(clean_title, domain_id, articles, dag_type=dag_type)
     concepts = brief["concepts"]
     concept_guides = brief["concept_guides"]
     misconceptions = brief["misconceptions"]
     icon = brief["icon"]
     category = brief["category"]
 
-    # 2. Validate DAG structure
+    # 2. Validate DAG structure using Kahn's topological sort
     dag_ok, dag_errs = validate_knowledge_dag(concepts)
     if not dag_ok:
         print(f"[DAG Validation Warning] {dag_errs}")
 
-    # 3. Synthesize tiered questions with probes and randomized permutations
-    questions = synthesize_universal_questions(domain_id, brief, num_questions=num_questions)
+    # 3. Synthesize tiered questions with probes and pattern diversity
+    questions = synthesize_universal_questions(domain_id, brief, num_questions=num_questions, seed_offset=seed_offset)
 
     # 4. Final Curriculum Validation Check
     is_valid, validation_errors = validate_curriculum_package(concepts, misconceptions, questions, category)

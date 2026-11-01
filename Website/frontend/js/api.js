@@ -127,6 +127,12 @@ const API = {
     return await res.json();
   },
 
+  getProviderStatus: async () => {
+    const res = await fetch(`${API_BASE}/api/assessment/provider-status`);
+    if (!res.ok) throw new Error("Failed to fetch provider status");
+    return await res.json();
+  },
+
   submitAssessment: async (submission) => {
     const res = await fetch(`${API_BASE}/api/assessment/submit`, {
       method: "POST",

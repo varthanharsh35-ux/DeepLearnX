@@ -1265,6 +1265,11 @@ async function handleCustomSyllabusSubmit(event) {
             <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: #cbd5e1;">
               Created <strong>${result.concepts_count} concepts</strong>, <strong>${result.questions_count} diagnostic questions</strong>, and registered prerequisite DAG for <strong>${result.name}</strong>.
             </p>
+            <p style="margin: 0.35rem 0 0; font-size: 0.78rem;">
+              <span class="badge" style="background: rgba(99, 102, 241, 0.25); border: 1px solid #6366f1; color: #c7d2fe; padding: 0.25rem 0.55rem; border-radius: 6px; font-weight: 500;">
+                ${result.generation_notice || (result.llm_used ? 'Generated live via Cloud LLM' : 'Generated via Authentic Offline Knowledge Synthesis')}
+              </span>
+            </p>
           </div>
           <button class="btn btn-primary btn-sm" onclick="startAssessmentFlow('${result.domain_id}')" style="background: #10b981; border-color: #10b981;">
             Launch Assessment Now &rarr;
@@ -1380,12 +1385,14 @@ function handleAiProviderChange() {
   }
 }
 
-function loadSavedApiKey() {
+async function loadSavedApiKey() {
   const savedKey = localStorage.getItem("deeplearnx_ai_api_key");
   const savedProv = localStorage.getItem("deeplearnx_ai_provider") || "gemini";
   const input = document.getElementById("aiApiKeyInput");
   const provider = document.getElementById("aiProviderSelect");
   const badge = document.getElementById("apiKeySavedBadge");
+  const pill = document.getElementById("providerModePill");
+
   if (input && savedKey) {
     input.value = savedKey;
     if (badge) {
@@ -1397,6 +1404,25 @@ function loadSavedApiKey() {
   if (provider && savedProv) {
     provider.value = savedProv;
     handleAiProviderChange();
+  }
+
+  try {
+    const status = await API.getProviderStatus();
+    if (pill) {
+      if (status.live_llm_ready || (savedKey && savedKey.trim())) {
+        pill.textContent = "🟢 Live LLM Active";
+        pill.style.background = "rgba(16, 185, 129, 0.2)";
+        pill.style.borderColor = "#10b981";
+        pill.style.color = "#6ee7b7";
+      } else {
+        pill.textContent = "🌐 Offline Knowledge Synthesis";
+        pill.style.background = "rgba(99, 102, 241, 0.15)";
+        pill.style.borderColor = "#6366f1";
+        pill.style.color = "#a5b4fc";
+      }
+    }
+  } catch (e) {
+    console.warn("Could not retrieve provider status", e);
   }
 }
 

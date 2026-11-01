@@ -442,6 +442,113 @@ def test_regression_u_tier_distribution_introductory():
     print(f"✓ Regression U Passed: Question tier balance verified (Basic: {counts.get('basic')}, Conceptual: {counts.get('conceptual')}, Application: {counts.get('application')}).")
 
 
+def test_regression_v_all_five_dag_topologies_and_kahns_cycle_detection():
+    """Regression V: Test all 5 DAG shapes (Linear, Branching, Multi-Root, Diamond, 5-Node) and Kahn cycle detection."""
+    print("\n--- Running Regression V: All 5 DAG Topologies & Kahn's Topological Sort ---")
+    topologies = ["linear", "branching", "multi_root", "diamond", "expanded_5node"]
+    for topo in topologies:
+        c, m, q, g, icon, cat = synthesize_authentic_curriculum(f"reg_v_{topo}", "Cognitive Psychology: Memory Systems", dag_type=topo)
+        dag_ok, dag_errs = validate_knowledge_dag(c)
+        assert dag_ok, f"Topology '{topo}' failed Kahn's topological sort: {dag_errs}"
+        if topo == "expanded_5node":
+            assert len(c) == 5, f"Expected 5 concepts for expanded_5node, got {len(c)}"
+        elif topo == "branching":
+            c1_id = c[0]["id"]
+            dependents = [node["id"] for node in c if c1_id in node.get("prerequisites", [])]
+            assert len(dependents) >= 2, f"Branching should have >=2 dependents from c1, got {dependents}"
+        elif topo == "multi_root":
+            roots = [node["id"] for node in c if not node.get("prerequisites")]
+            assert len(roots) >= 2, f"Multi-root should have >=2 roots, got {roots}"
+        elif topo == "linear":
+            for idx in range(1, len(c)):
+                assert c[idx-1]["id"] in c[idx].get("prerequisites", [])
+        print(f"  ✓ Validated '{topo}' topology ({len(c)} nodes) through Kahn's algorithm.")
+        
+    cyclic_concepts = [
+        {"id": "node_1", "name": "Node 1", "prerequisites": ["node_3"]},
+        {"id": "node_2", "name": "Node 2", "prerequisites": ["node_1"]},
+        {"id": "node_3", "name": "Node 3", "prerequisites": ["node_2"]}
+    ]
+    cycle_ok, cycle_errs = validate_knowledge_dag(cyclic_concepts)
+    assert not cycle_ok, "Kahn's algorithm failed to catch cyclic dependency graph!"
+    assert any("Cycle detected" in err for err in cycle_errs), f"Expected 'Cycle detected' error, got: {cycle_errs}"
+    
+    self_loop_concepts = [
+        {"id": "node_self", "name": "Self Node", "prerequisites": ["node_self"]}
+    ]
+    loop_ok, loop_errs = validate_knowledge_dag(self_loop_concepts)
+    assert not loop_ok, "Kahn's algorithm failed to catch self-loop!"
+    print("  ✓ Cycle detection and self-loop detection verified: Kahn's algorithm correctly rejects invalid graphs.")
+    print("✓ Regression V Passed: All 5 topological DAG variants validated and cycle protection confirmed.")
+
+
+def test_regression_w_content_level_question_diversity_jaccard_similarity():
+    """Regression W: Multi-pattern generation produces genuine question text diversity (Jaccard similarity < 0.70)."""
+    print("\n--- Running Regression W: Question Text Diversity & Jaccard Similarity ---")
+    topic = "Supply and Demand"
+    run_a = synthesize_authentic_curriculum("reg_w_run_0", topic, seed_offset=0)
+    run_b = synthesize_authentic_curriculum("reg_w_run_1", topic, seed_offset=1)
+    
+    q_a = run_a[2]
+    q_b = run_b[2]
+    
+    def tokenize(text):
+        return set(re.findall(r'\b[a-z]{3,}\b', text.lower()))
+        
+    jaccard_scores = []
+    for idx in range(min(len(q_a), len(q_b))):
+        tokens_a = tokenize(q_a[idx]["question_text"])
+        tokens_b = tokenize(q_b[idx]["question_text"])
+        intersection = len(tokens_a & tokens_b)
+        union = len(tokens_a | tokens_b)
+        jaccard = intersection / max(union, 1)
+        jaccard_scores.append(jaccard)
+        
+    avg_jaccard = sum(jaccard_scores) / len(jaccard_scores)
+    max_jaccard = max(jaccard_scores)
+    
+    print(f"  Question Stems Compared: {len(jaccard_scores)}")
+    print(f"  Average Question Stem Jaccard Similarity: {avg_jaccard:.3f}")
+    print(f"  Maximum Question Stem Jaccard Similarity: {max_jaccard:.3f}")
+    
+    assert avg_jaccard < 0.70, f"Average Jaccard similarity {avg_jaccard:.3f} >= 0.70; questions are too uniform across runs!"
+    print(f"✓ Regression W Passed: Question text diversity verified (Mean Jaccard: {avg_jaccard:.3f} < 0.70).")
+
+
+def test_regression_x_reading_speed_word_count_diagnostics():
+    """Regression X: Word-count based reading speed analysis detects rapid guessing based on text length."""
+    print("\n--- Running Regression X: Reading-Speed Word-Count Diagnostics ---")
+    long_question_info = {
+        "question_text": "In a distributed Byzantine consensus protocol operating across fifty heterogeneous validation nodes under partial network synchrony, an adversary partitions the cluster into two equal factions. Which mechanism guarantees safety?",
+        "option_a": "A quorum requirement strictly demanding greater than two-thirds majority signatures before state commitment.",
+        "option_b": "A gossip protocol propagating unvalidated block proposals without cryptographic signature verification.",
+        "option_c": "A round-robin leader rotation mechanism that ignores timeout events and packet drop notifications.",
+        "option_d": "A proof-of-work mining difficulty adjustment algorithm recalculating every ten seconds dynamically."
+    }
+    fast_response = [{
+        "question_id": "q_long_1",
+        "q_info": long_question_info,
+        "selected_option": "A",
+        "response_time": 3.0,
+        "confidence": 4
+    }]
+    analysis_fast = predictor.analyze_session(fast_response)
+    fb_fast = analysis_fast.get("false_mastery_breakdown", {})
+    assert fb_fast.get("rapid_guessing_pct", 0) > 0, "Failed to flag 70-word question answered in 3s as rapid guessing!"
+    
+    deliberate_response = [{
+        "question_id": "q_long_2",
+        "q_info": long_question_info,
+        "selected_option": "A",
+        "response_time": 20.0,
+        "confidence": 4
+    }]
+    analysis_delib = predictor.analyze_session(deliberate_response)
+    fb_delib = analysis_delib.get("false_mastery_breakdown", {})
+    assert fb_delib.get("rapid_guessing_pct", 0) == 0, "Falsely flagged 20s reading time as rapid guessing!"
+    print("✓ Regression X Passed: Reading speed calibrated to total word count (~23 words/sec flagged, ~3.5 words/sec accepted).")
+
+
 # =====================================================================
 # PART 2: 15 NEW UNSEEN TOPICS BENCHMARK ACROSS GROUPS A, B, C
 # =====================================================================
@@ -695,6 +802,9 @@ if __name__ == "__main__":
     test_regression_s_application_difficulty_separation()
     test_regression_t_randomized_probe_placement()
     test_regression_u_tier_distribution_introductory()
+    test_regression_v_all_five_dag_topologies_and_kahns_cycle_detection()
+    test_regression_w_content_level_question_diversity_jaccard_similarity()
+    test_regression_x_reading_speed_word_count_diagnostics()
     
     # 2. Generalization Groups A, B, C with 15 NEW Unseen Topics
     test_group_a_new_question_quality_and_diversity()
@@ -705,5 +815,5 @@ if __name__ == "__main__":
     test_historical_failure_cases()
     
     print("\n" + "=" * 80)
-    print("ALL TESTS (REGRESSIONS A-U, GROUPS A-B-C [15 NEW TOPICS], AND HISTORICAL CASES) PASSED 100%!")
+    print("ALL TESTS (REGRESSIONS A-X, GROUPS A-B-C [15 NEW TOPICS], AND HISTORICAL CASES) PASSED 100%!")
     print("=" * 80)

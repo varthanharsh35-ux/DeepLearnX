@@ -107,6 +107,8 @@ class CustomGenerateRequest(BaseModel):
     api_provider: Optional[str] = "gemini"
     model_name: Optional[str] = None
     require_live_llm: Optional[bool] = False
+    dag_type: Optional[str] = None
+    seed_offset: Optional[int] = 0
 
 # ----------------- AUTH ENDPOINTS -----------------
 
@@ -527,7 +529,13 @@ def get_assessment_questions(
         rp_data = None
         if r["reasoning_probe"]:
             try:
-                rp_data = json.loads(r["reasoning_probe"])
+                rp_parsed = json.loads(r["reasoning_probe"])
+                if isinstance(rp_parsed, dict):
+                    # Sanitize: client receives probe prompt and options, never answer key
+                    rp_data = {
+                        "prompt": rp_parsed.get("prompt") or rp_parsed.get("probe_question") or "",
+                        "options": rp_parsed.get("options") or {}
+                    }
             except Exception:
                 rp_data = None
 
@@ -583,7 +591,9 @@ def custom_generate_assessment(req: CustomGenerateRequest):
             api_key=req.api_key,
             api_provider=req.api_provider,
             model_name=req.model_name,
-            require_live_llm=bool(req.require_live_llm)
+            require_live_llm=bool(req.require_live_llm),
+            dag_type=req.dag_type,
+            seed_offset=req.seed_offset or 0
         )
         return result
     except ValueError as ve:

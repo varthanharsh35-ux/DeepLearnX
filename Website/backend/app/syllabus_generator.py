@@ -138,7 +138,13 @@ CRITICAL RULES:
      }}
    - This probe tests whether the student understands the underlying mechanism or just guessed.
 4. DIRECTED ACYCLIC GRAPH (DAG) PREREQUISITES:
-   - Break the topic into 3 or 4 sequential concepts where later concepts depend on earlier ones.
+   - Model the concept prerequisites authentically as a Directed Acyclic Graph (DAG) with 3 to 6 concepts.
+   - The DAG topology should match the actual epistemic structure of the topic:
+     * Linear: sequential progression (c1 -> c2 -> c3 -> c4)
+     * Branching: single foundational concept branching into multiple specialized concepts (c1 -> c2, c1 -> c3, etc.)
+     * Multi-Root Merging: multiple independent foundations converging into an integrated concept ({c1, c2} -> c3 -> c4)
+     * Diamond: foundational root branching into two distinct dimensions that synthesize into an advanced application (c1 -> c2, c1 -> c3, {c2, c3} -> c4)
+   - Ensure the prerequisites strictly form a valid Directed Acyclic Graph without cycles or self-dependencies.
 
 You MUST respond ONLY with a valid JSON object matching this schema:
 {{
@@ -1591,7 +1597,9 @@ class SyllabusGeneratorEngine:
         api_key: Optional[str] = None,
         api_provider: Optional[str] = "gemini",
         model_name: Optional[str] = None,
-        require_live_llm: bool = False
+        require_live_llm: bool = False,
+        dag_type: Optional[str] = None,
+        seed_offset: int = 0
     ) -> Dict[str, Any]:
         """
         Generates full domain assessment:
@@ -1689,7 +1697,9 @@ class SyllabusGeneratorEngine:
                 domain_id=domain_id,
                 topic_title=topic_title,
                 syllabus_text=syllabus_text,
-                num_questions=num_questions
+                num_questions=num_questions,
+                dag_type=dag_type,
+                seed_offset=seed_offset
             )
             res["generation_source"] = "offline_knowledge_synthesis"
             res["llm_used"] = False
@@ -1878,7 +1888,9 @@ class SyllabusGeneratorEngine:
         domain_id: str,
         topic_title: str,
         syllabus_text: str = "",
-        num_questions: int = 12
+        num_questions: int = 12,
+        dag_type: Optional[str] = None,
+        seed_offset: int = 0
     ) -> Dict[str, Any]:
         """Dynamic domain-aware generator when neither LLM API nor curated topic matched.
         Uses universal cognitive multi-disciplinary question engine for authentic, non-repeating curricula.
@@ -1899,7 +1911,10 @@ class SyllabusGeneratorEngine:
         concepts, misconceptions, questions, concept_guides, icon, category = synthesize_authentic_curriculum(
             domain_id=domain_id,
             topic_title=topic_title,
-            articles=articles
+            articles=articles,
+            num_questions=num_questions,
+            dag_type=dag_type,
+            seed_offset=seed_offset
         )
 
         self.persist_to_db(

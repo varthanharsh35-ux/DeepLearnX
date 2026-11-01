@@ -172,12 +172,23 @@ class DeepLearnXPredictor:
                 }
             opt_lens = {k: len(str(v).split()) for k, v in opts_dict.items() if v}
             if opt_lens:
-                longest_opt = max(opt_lens, key=opt_lens.get)
-                if selected == longest_opt:
-                    heuristic_bias_count += 1
+                max_len = max(opt_lens.values())
+                min_len = min(opt_lens.values())
+                # A true length cue heuristic requires an observable length disparity (>= 4 words difference)
+                if (max_len - min_len) >= 4:
+                    longest_opt = max(opt_lens, key=opt_lens.get)
+                    if selected == longest_opt:
+                        heuristic_bias_count += 1
             
             time_spent = float(r.get("response_time", 30.0))
-            if time_spent < 3.5:
+            q_words = len(str(q_info.get("question_text", "")).split())
+            opt_words = sum(opt_lens.values())
+            total_words = max(q_words + opt_words, 10)
+            
+            # Reading-speed word-count threshold: average adult reads ~4 words/sec (240 wpm).
+            # Answering at > 10 words/second or under 2.0s minimum physical reading reflex is rapid guessing.
+            is_rapid_guess = (time_spent < 2.0) or (total_words >= 15 and (time_spent < (total_words / 10.0))) or (time_spent < 3.5 and total_words >= 25)
+            if is_rapid_guess:
                 rapid_guessing_count += 1
                 
             # Check Two-Tier Reasoning Probe consistency
@@ -369,7 +380,7 @@ class DeepLearnXPredictor:
             is_gaming_detected = True
             predicted_state = "False Mastery"
             pred_class_idx = 1
-            gaming_reason = f"You answered {round(rgb * 100)}% of questions in under 3.5 seconds. Slowing down just a bit will help you avoid simple mistakes and understand the problems better!"
+            gaming_reason = f"You answered {round(rgb * 100)}% of questions faster than normal reading speed. Slowing down to read each question carefully will help you avoid simple mistakes and understand the problems better!"
         elif two_tier_inconsistency_count >= 2 and acc_overall >= 0.70:
             is_gaming_detected = True
             predicted_state = "False Mastery"
