@@ -166,14 +166,14 @@ def seed_database():
     conn.close()
     print("Database successfully seeded with Pokemon, Chemistry, Biology, Math, and Deep Learning!")
 
-    # Expand question banks to full 197 canonical questions across all 5 domains
+    # Expand question banks to full 185 canonical questions across all 5 domains
     try:
         from seed_expansion_questions import seed_expansion
-        seed_expansion()
+        seed_expansion(DB_PATH)
     except Exception:
         try:
             import seed_expansion_questions
-            seed_expansion_questions.seed_expansion()
+            seed_expansion_questions.seed_expansion(DB_PATH)
         except Exception:
             pass
 

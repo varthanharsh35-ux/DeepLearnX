@@ -1802,9 +1802,10 @@ ADDITIONAL_MISCONCEPTIONS = [
     }
 ]
 
-def seed_expansion():
-    print(f"Connecting to {DB_PATH} to expand question banks...")
-    conn = sqlite3.connect(str(DB_PATH))
+def seed_expansion(target_db_path=None):
+    active_path = target_db_path or DB_PATH
+    print(f"Connecting to {active_path} to expand question banks...")
+    conn = sqlite3.connect(str(active_path))
     cursor = conn.cursor()
 
     # 1. Insert new misconceptions
