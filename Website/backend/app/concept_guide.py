@@ -338,7 +338,12 @@ def get_concept_guide(concept_id: str, domain_id: str = None) -> dict:
         "key_takeaway": "Focus on understanding the core principle behind the formula before attempting practice questions."
     }
 
-def generate_12_section_remedial_document(concept_id: str, domain_id: str = None, concept_data: dict = None) -> dict:
+def generate_12_section_remedial_document(
+    concept_id: str,
+    domain_id: str = None,
+    concept_data: dict = None,
+    student_error: dict = None
+) -> dict:
     """
     Generates a comprehensive, pedagogical 12-section remedial learning document:
     1. Module Title & Learning Objective
@@ -348,7 +353,7 @@ def generate_12_section_remedial_document(concept_id: str, domain_id: str = None
     5. Essential Terminology & Technical Definitions
     6. Real-World Practical Examples & Case Studies
     7. Step-by-Step Procedure / Diagnostic Framework
-    8. Common Misconceptions & Cognitive Traps
+    8. Common Misconceptions & Cognitive Traps (with personalized error feedback)
     9. Contrasting Scenarios (Correct vs Flawed Application)
     10. Practical Decision Rules of Thumb & Heuristics
     11. Key Takeaways & Executive Summary
@@ -423,6 +428,35 @@ def generate_12_section_remedial_document(concept_id: str, domain_id: str = None
         except Exception:
             pass
 
+    practice_questions_list = questions if questions else [
+        {
+            "id": f"{concept_id}_prac1",
+            "type": "conceptual",
+            "text": f"In a new scenario involving {cname}, which diagnostic action correctly verifies that the primary governing relationship is operating as expected?",
+            "options": {
+                "A": f"Confirming that baseline criteria and initial conditions are satisfied before applying {cname} rules.",
+                "B": f"Assuming passive correlation guarantees the outcome without checking intermediate variables.",
+                "C": f"Disregarding anomalous deviations as long as superficial symptoms appear normal.",
+                "D": f"Applying arbitrary adjustments until an accidental nominal outcome is observed."
+            },
+            "correct": "A",
+            "explanation": f"Verifying baseline criteria is the fundamental rule for accurate application in {cname}."
+        },
+        {
+            "id": f"{concept_id}_prac2",
+            "type": "application",
+            "text": f"A practitioner encounters an edge-case constraint when applying {cname}. What is the most reliable strategy to prevent operational collapse?",
+            "options": {
+                "A": f"Isolate independent factors, trace causal pathways, and calibrate parameters to remain within validated boundary limits.",
+                "B": f"Extrapolate past the validated threshold assuming conditions remain identical.",
+                "C": f"Cease documentation and rely on unverified intuition.",
+                "D": f"Introduce contradictory secondary variables without controlling for primary inputs."
+            },
+            "correct": "A",
+            "explanation": f"Controlled boundary calibration ensures operational stability in {cname}."
+        }
+    ]
+
     # Build 12 Structured Sections
     sections = [
         {
@@ -462,11 +496,15 @@ def generate_12_section_remedial_document(concept_id: str, domain_id: str = None
         },
         {
             "section_number": 8,
-            "title": "Common Misconceptions & Cognitive Traps",
+            "title": "Common Misconceptions & Cognitive Traps (with personalized error feedback)" if student_error else "Common Misconceptions & Cognitive Traps",
             "content": f"**Primary Cognitive Trap**: {mistake}\n\n" + (
                 "\n\n".join([f"- **{m['name']}**: {m['description']}\n  *Actionable Correction*: {m['remediation']}" for m in misconceptions])
                 if misconceptions
                 else f"- **Surface vs Root Conflation**: Treating observable symptoms rather than fixing root causes."
+            ) + (
+                f"\n\n### Personalized Diagnostic Analysis of Your Mistake\n- **Question Missed**: {student_error.get('question_text', 'Diagnostic assessment item')}\n- **Your Choice**: `{student_error.get('selected_text', student_error.get('selected_option', 'Incorrect option'))}`\n- **Target Principle**: `{student_error.get('correct_text', student_error.get('correct_option', 'Correct principle'))}`\n- **Diagnostic Correction**: Choosing `{student_error.get('selected_text', student_error.get('selected_option', 'your choice'))}` reflects a conceptual trap. In **{cname}**, `{student_error.get('correct_text', student_error.get('correct_option', 'the correct principle'))}` is the verified causal mechanism."
+                if student_error and isinstance(student_error, dict)
+                else ""
             )
         },
         {
@@ -488,7 +526,7 @@ def generate_12_section_remedial_document(concept_id: str, domain_id: str = None
             "section_number": 12,
             "title": "Knowledge Verification Check",
             "content": "Test your mastery on these targeted follow-up practice questions:",
-            "practice_questions": questions
+            "practice_questions": practice_questions_list
         }
     ]
 
@@ -517,7 +555,7 @@ def generate_12_section_remedial_document(concept_id: str, domain_id: str = None
         "domain_name": domain_name,
         "sections_count": len(sections),
         "sections": sections,
-        "practice_questions": questions,
+        "practice_questions": practice_questions_list,
         "full_markdown": full_markdown
     }
 

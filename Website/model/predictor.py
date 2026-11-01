@@ -360,12 +360,12 @@ class DeepLearnXPredictor:
         
         # 1. Anti-Gaming Heuristic Detection: Length Cue Bias Exploitation
         has_probe_failures = (two_tier_total_count > 0 and two_tier_passed_count < two_tier_total_count)
-        if hbi >= 0.60 and (has_probe_failures or rgb >= 0.35 or avg_time < 0.10):
+        if hbi >= 0.60 and acc_overall >= 0.65 and (has_probe_failures or rgb >= 0.35 or avg_time < 0.10):
             is_gaming_detected = True
             predicted_state = "False Mastery"
             pred_class_idx = 1
             gaming_reason = f"Heads up! It looks like you chose the longest answer in {round(hbi * 100)}% of questions. The longest choice isn't always the right one—take your time to read each question carefully!"
-        elif rgb >= 0.50 and hbi >= 0.40:
+        elif rgb >= 0.50 and hbi >= 0.40 and acc_overall >= 0.65:
             is_gaming_detected = True
             predicted_state = "False Mastery"
             pred_class_idx = 1
@@ -382,6 +382,10 @@ class DeepLearnXPredictor:
         elif detected_misconceptions:
             predicted_state = "Conceptual Misconception"
             pred_class_idx = 2
+        elif acc_basic >= 0.70 and acc_conc >= 0.50 and acc_app <= 0.40 and not is_gaming_detected and two_tier_inconsistency_count < 2:
+            predicted_state = "Application Difficulty"
+            pred_class_idx = 1
+            gaming_reason = "You demonstrated strong mastery of fundamental definitions and conceptual principles, but encountered difficulty applying those principles to complex practical scenarios. Target your practice on applied problem-solving!"
         elif tier_divergence >= 0.35 and acc_basic >= 0.70 and acc_overall >= 0.65 and acc_app <= 0.40:
             predicted_state = "False Mastery"
             pred_class_idx = 1
@@ -397,11 +401,14 @@ class DeepLearnXPredictor:
             
         # Calibrated evidence-based confidence calculation (Regression H & O)
         if insufficient_evidence:
+            predicted_state = "Insufficient Evidence"
             calibrated_conf = 0.40
             state_probs = [0.25, 0.25, 0.25, 0.25]
         else:
             if predicted_state == "Genuine Mastery":
                 calibrated_conf = min(0.96, max(0.85, 0.78 + 0.15 * acc_overall + 0.05 * (two_tier_passed_count / max(two_tier_total_count, 1))))
+            elif predicted_state == "Application Difficulty":
+                calibrated_conf = min(0.95, max(0.85, 0.80 + 0.15 * ((acc_basic + acc_conc) / 2.0)))
             elif predicted_state == "False Mastery":
                 evidence_metric = max(hbi, rgb, tier_divergence, two_tier_inconsistency_count / max(two_tier_total_count, 1))
                 calibrated_conf = min(0.95, max(0.83, 0.80 + 0.12 * evidence_metric))
@@ -412,11 +419,12 @@ class DeepLearnXPredictor:
                 
             residual = (1.0 - calibrated_conf) / 3.0
             state_probs = [residual] * 4
-            state_probs[pred_class_idx] = calibrated_conf
+            state_probs[min(pred_class_idx, 3)] = calibrated_conf
             
         # Detailed false mastery diagnostics
         false_mastery_breakdown = {
             "is_false_mastery": (predicted_state == "False Mastery"),
+            "is_application_difficulty": (predicted_state == "Application Difficulty"),
             "basic_accuracy": round(acc_basic * 100, 1),
             "conceptual_accuracy": round(acc_conc * 100, 1),
             "application_accuracy": round(acc_app * 100, 1),

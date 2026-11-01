@@ -429,18 +429,23 @@ def check_provider_status() -> Dict[str, Any]:
     
     return {
         "status": "ready" if active_mode == "live_llm" else "offline_ready",
+        "live_llm_ready": bool(gemini_key or openai_key),
         "active_mode": active_mode,
+        "fallback_mode": "offline_knowledge_synthesis",
+        "supported_modes": ["live_llm", "offline_knowledge_synthesis"],
         "providers": {
             "gemini": {
                 "configured": bool(gemini_key),
                 "key_masked": mask_key(gemini_key),
                 "network_reachable": gemini_reachable,
+                "default_model": os.environ.get("GEMINI_DEFAULT_MODEL", "gemini-1.5-flash"),
                 "supported_models": ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"]
             },
             "openai": {
                 "configured": bool(openai_key),
                 "key_masked": mask_key(openai_key),
                 "network_reachable": openai_reachable,
+                "default_model": os.environ.get("OPENAI_DEFAULT_MODEL", "gpt-4o-mini"),
                 "supported_models": ["gpt-4o-mini", "gpt-4o"]
             }
         },
@@ -1614,6 +1619,9 @@ class SyllabusGeneratorEngine:
         model_used = None
         provider_error = None
 
+        if require_live_llm and not resolved_key:
+            raise ValueError("Live LLM generation was requested, but no valid API key was found in Website/.env or request parameters. Configure GEMINI_API_KEY or OPENAI_API_KEY to proceed.")
+
         if resolved_key:
             valid_format = False
             if provider == "openai" and (resolved_key.startswith("sk-") or "openai" in resolved_key.lower()):
@@ -1685,6 +1693,7 @@ class SyllabusGeneratorEngine:
             )
             res["generation_source"] = "offline_knowledge_synthesis"
             res["llm_used"] = False
+            res["live_llm_ready"] = False
             res["llm_provider"] = None
             res["model_name"] = None
             if provider_error:

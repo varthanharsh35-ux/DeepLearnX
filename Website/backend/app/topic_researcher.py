@@ -162,162 +162,30 @@ def detect_domain_meta(topic: str, articles: List[Dict[str, str]]) -> Tuple[str,
 def synthesize_authentic_curriculum(
     domain_id: str,
     topic_title: str,
-    articles: List[Dict[str, str]] = None
+    articles: List[Dict[str, str]] = None,
+    num_questions: int = 12
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], str, str]:
     """
-    Synthesizes authentic concepts, misconceptions, and 12 tiered diagnostic questions
+    Synthesizes authentic concepts, misconceptions, and tiered diagnostic questions
     specifically built from real-world scientific and academic knowledge.
-    Uses TopicInterpreter to establish the pedagogical scope and build genuine questions.
+    Routes to the universal educational intelligence synthesizer for non-linear DAGs,
+    authentic concepts, and balanced questions.
     """
     try:
-        from topic_interpreter import interpret_topic_scope
-        from quiz_validator import validate_curriculum_package
+        from universal_synthesizer import synthesize_universal_curriculum
     except ImportError:
         try:
-            from app.topic_interpreter import interpret_topic_scope
-            from app.quiz_validator import validate_curriculum_package
+            from app.universal_synthesizer import synthesize_universal_curriculum
         except ImportError:
-            from backend.app.topic_interpreter import interpret_topic_scope
-            from backend.app.quiz_validator import validate_curriculum_package
-    
-    # 1. Interpret topic and construct authentic knowledge brief with research extracts
-    brief = interpret_topic_scope(topic_title, articles=articles)
-    icon = brief.icon
-    category = brief.category
-    
-    # 2. Build Concepts & Guides
-    concepts = []
-    concept_guides = []
-    for i, c_def in enumerate(brief.concepts_raw):
-        cid = f"{domain_id}_{c_def.get('id_suffix', f'c{i+1}')}"
-        prereqs = [concepts[i-1]["id"]] if i > 0 else []
-        cname = c_def["name"]
-        concepts.append({
-            "id": cid,
-            "domain_id": domain_id,
-            "name": cname,
-            "slug": re.sub(r'[^a-zA-Z0-9]+', '_', cname.lower()).strip('_')[:28],
-            "category": category,
-            "description": c_def["description"],
-            "prerequisites": prereqs,
-            "order_index": i + 1
-        })
-        concept_guides.append({
-            "concept_id": cid,
-            "domain_id": domain_id,
-            "name": cname,
-            "core_idea": c_def.get("core_idea", c_def["description"]),
-            "example": c_def.get("example", f"Practical application in {cname}."),
-            "common_mistake": c_def.get("common_mistake", f"Common trap in {cname}."),
-            "key_takeaway": c_def.get("key_takeaway", f"Core takeaway of {cname}.")
-        })
-        
-    # 3. Build Misconceptions
-    misconceptions = []
-    for i, m_def in enumerate(brief.misconceptions_raw):
-        cid = concepts[i]["id"] if i < len(concepts) else concepts[0]["id"]
-        misconceptions.append({
-            "id": f"MISC_{domain_id.upper()}_{i+1}",
-            "domain_id": domain_id,
-            "code": m_def.get("code", f"M-{i+1:02d}"),
-            "concept_id": cid,
-            "name": m_def["name"],
-            "description": m_def["description"],
-            "remediation": m_def["remediation"]
-        })
-        
-    # 4. Build Questions
-    raw_qs = brief.questions_raw
-    # Ensure exactly 4 reasoning probes are active across questions
-    existing_probe_indices = [idx for idx, q in enumerate(raw_qs) if q.get("reasoning_probe")]
-    needed = 4 - len(existing_probe_indices)
-    if needed > 0:
-        candidate_indices = [idx for idx, q in enumerate(raw_qs) if idx not in existing_probe_indices and q.get("question_type") in ["conceptual", "application"]]
-        to_add = random.sample(candidate_indices, min(needed, len(candidate_indices))) if candidate_indices else []
-        for c_idx in to_add:
-            corr_text = raw_qs[c_idx]["option_a"]
-            if corr_text.lower().startswith("because "):
-                corr_text = corr_text[8:]
-            c_name = concepts[c_idx // 3]["name"] if (c_idx // 3) < len(concepts) else topic_title
-            raw_qs[c_idx]["reasoning_probe"] = {
-                "prompt": f"Why is this foundational principle or relationship valid for {c_name}?",
-                "options": {
-                    "A": f"Because {corr_text.rstrip('.')}.",
-                    "B": "Because introductory definitions can be discarded once practical problems begin.",
-                    "C": "Because observational variables fluctuate randomly without underlying rules.",
-                    "D": "Because academic convention requires selecting this option regardless of facts."
-                },
-                "correct_probe": "A"
-            }
-    elif needed < 0:
-        excess = random.sample(existing_probe_indices, -needed)
-        for idx in excess:
-            raw_qs[idx]["reasoning_probe"] = None
+            from backend.app.universal_synthesizer import synthesize_universal_curriculum
 
-    questions = []
-    for i, q_def in enumerate(raw_qs):
-        c_idx = i // 3 if i < 12 else 0
-        cid = concepts[c_idx]["id"]
-        mid = misconceptions[c_idx]["id"]
-        
-        rp = q_def.get("reasoning_probe")
-        
-        q_obj = {
-            "id": f"{domain_id}_q{i+1}",
-            "question_id": f"{domain_id}_q{i+1}",
-            "domain_id": domain_id,
-            "concept_id": cid,
-            "question_type": q_def.get("question_type", "basic"),
-            "difficulty_tier": q_def.get("question_type", "basic"),
-            "difficulty": q_def.get("difficulty", "easy"),
-            "question_text": q_def["question_text"],
-            "option_a": q_def["option_a"],
-            "option_b": q_def["option_b"],
-            "option_c": q_def["option_c"],
-            "option_d": q_def["option_d"],
-            "correct_option": q_def.get("correct_option", "A"),
-            "explanation": q_def["explanation"],
-            "misconception_id": mid,
-            "prerequisite_id": concepts[c_idx]["prerequisites"][0] if concepts[c_idx]["prerequisites"] else cid,
-            "reasoning_probe": rp
-        }
-        questions.append(q_obj)
-        
-    # 5. Shuffle options for questions and reasoning probes while preserving answer key integrity
-    for q in questions:
-        orig_corr = q.get("correct_option", "A").upper().strip()
-        idx_map = {"A": 0, "B": 1, "C": 2, "D": 3}
-        opts = [q["option_a"], q["option_b"], q["option_c"], q["option_d"]]
-        corr_text = opts[idx_map.get(orig_corr, 0)]
-        random.shuffle(opts)
-        q["option_a"] = opts[0]
-        q["option_b"] = opts[1]
-        q["option_c"] = opts[2]
-        q["option_d"] = opts[3]
-        for ltr, txt in [("A", opts[0]), ("B", opts[1]), ("C", opts[2]), ("D", opts[3])]:
-            if txt == corr_text:
-                q["correct_option"] = ltr
-                break
-                
-        rp = q.get("reasoning_probe")
-        if rp and isinstance(rp, dict) and "options" in rp:
-            p_opts = rp["options"]
-            p_orig_corr = rp.get("correct_probe", "A").upper().strip()
-            p_corr_txt = p_opts.get(p_orig_corr, p_opts.get("A", ""))
-            p_list = list(p_opts.values())
-            random.shuffle(p_list)
-            rp["options"] = {"A": p_list[0], "B": p_list[1], "C": p_list[2], "D": p_list[3]}
-            for ltr, txt in rp["options"].items():
-                if txt == p_corr_txt:
-                    rp["correct_probe"] = ltr
-                    break
+    if articles is None:
+        try:
+            articles = fetch_wikipedia_knowledge(topic_title)
+        except Exception:
+            articles = []
 
-    # 6. Validate Curriculum Package
-    is_valid, validation_errors = validate_curriculum_package(concepts, misconceptions, questions, category)
-    if not is_valid:
-        print(f"[Validation Warning] Package for '{topic_title}' had issues: {validation_errors[:3]}")
-
-    return concepts, misconceptions, questions, concept_guides, icon, category
+    return synthesize_universal_curriculum(domain_id, topic_title, articles=articles, num_questions=num_questions)
 
 def build_curriculum_from_articles(
     domain_id: str,

@@ -229,6 +229,11 @@ def interpret_topic_scope(
                 "correct_probe": "A"
             }
 
+    # Ensure concepts have unique id for validation
+    for idx, c in enumerate(brief.concepts_raw):
+        if not c.get("id"):
+            c["id"] = f"c_{idx+1}"
+
     # Perform strict quality validation
     is_valid, validation_errors = validate_curriculum_package(
         brief.concepts_raw,
@@ -1005,7 +1010,7 @@ def build_cs_db_curriculum(title: str, cat: str, icon: str, scope: str, arts: li
 
 
 def build_ling_curriculum(title: str, cat: str, icon: str, scope: str, arts: list) -> TopicKnowledgeBrief:
-    is_japanese = "japanese" in title.lower() or any("japanese" in a.get("title", "").lower() for a in arts)
+    is_japanese = "japanese" in title.lower() and ("particle" in title.lower() or "joshi" in title.lower())
     
     if is_japanese:
         concepts = [

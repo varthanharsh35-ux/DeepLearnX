@@ -253,6 +253,84 @@ def validate_question(q: Dict[str, Any], category: str = "") -> Tuple[bool, List
     return len(errors) == 0, errors
 
 
+def validate_knowledge_dag(concepts: List[Dict[str, Any]]) -> Tuple[bool, List[str]]:
+    """
+    Validates the structure and pedagogical validity of a Directed Acyclic Graph (DAG) of concepts:
+    1. Node count (between 2 and 8 concepts)
+    2. Unique concept IDs and unique names
+    3. Missing or dangling prerequisite references
+    4. Self-loops (c -> c)
+    5. Acyclicity via Kahn's topological sort
+    6. Substantive learning objectives and descriptions
+    7. Supports non-linear topologies (independent roots, branching, merging)
+    """
+    errors = []
+    if not concepts or len(concepts) < 2 or len(concepts) > 8:
+        errors.append(f"Expected between 2 and 8 concepts in DAG, got {len(concepts) if concepts else 0}.")
+        return False, errors
+        
+    c_ids = set()
+    c_names = set()
+    for c in concepts:
+        cid = c.get("id") or c.get("concept_id")
+        name = c.get("name")
+        if not cid:
+            errors.append("Concept missing 'id'.")
+        elif cid in c_ids:
+            errors.append(f"Duplicate concept ID: '{cid}'.")
+        else:
+            c_ids.add(cid)
+            
+        if not name:
+            errors.append("Concept missing 'name'.")
+        elif name in c_names:
+            errors.append(f"Duplicate concept name: '{name}'.")
+        else:
+            c_names.add(name)
+            
+        desc = c.get("description") or c.get("core_idea")
+        if not desc or len(str(desc).strip()) < 10:
+            errors.append(f"Concept '{cid}' lacks a substantive description or learning objective.")
+
+    # Check prerequisites references & build adjacency list
+    adj = {cid: [] for cid in c_ids}
+    in_degree = {cid: 0 for cid in c_ids}
+    
+    for c in concepts:
+        cid = c.get("id") or c.get("concept_id")
+        prereqs = c.get("prerequisites") or []
+        if isinstance(prereqs, str):
+            try:
+                import json
+                prereqs = json.loads(prereqs)
+            except Exception:
+                prereqs = []
+        for p in prereqs:
+            if p == cid:
+                errors.append(f"Self-loop detected: Concept '{cid}' cannot be its own prerequisite.")
+            elif p not in c_ids:
+                errors.append(f"Dangling prerequisite reference: Concept '{cid}' references non-existent prerequisite '{p}'.")
+            else:
+                adj[p].append(cid)
+                in_degree[cid] += 1
+                
+    # Kahn's algorithm for cycle detection
+    queue = [cid for cid, deg in in_degree.items() if deg == 0]
+    visited_count = 0
+    while queue:
+        curr = queue.pop(0)
+        visited_count += 1
+        for neighbor in adj.get(curr, []):
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+                
+    if visited_count != len(c_ids):
+        errors.append("Cycle detected in knowledge DAG! Concepts must form a strict Directed Acyclic Graph.")
+        
+    return len(errors) == 0, errors
+
+
 def validate_curriculum_package(
     concepts: List[Dict[str, Any]],
     misconceptions: List[Dict[str, Any]],
@@ -261,20 +339,23 @@ def validate_curriculum_package(
 ) -> Tuple[bool, List[str]]:
     """
     Validates a complete curriculum package before persisting to database.
+    Supports variable concept counts (3 to 6), variable question counts (8 to 15),
+    and non-linear DAG structures.
     """
     errors = []
     
-    # Concepts count
-    if len(concepts) != 4:
-        errors.append(f"Expected exactly 4 concepts, got {len(concepts)}.")
+    # 1. Validate Knowledge DAG
+    dag_ok, dag_errs = validate_knowledge_dag(concepts)
+    if not dag_ok:
+        errors.extend(dag_errs)
         
-    # Questions count
-    if len(questions) != 12:
-        errors.append(f"Expected exactly 12 questions, got {len(questions)}.")
+    # 2. Questions count check (flexible between 8 and 15)
+    if not (8 <= len(questions) <= 15):
+        errors.append(f"Expected between 8 and 15 questions, got {len(questions)}.")
         
-    # Misconceptions count
-    if len(misconceptions) != 4:
-        errors.append(f"Expected exactly 4 misconceptions, got {len(misconceptions)}.")
+    # 3. Misconceptions count check (flexible between 2 and 6)
+    if not (2 <= len(misconceptions) <= 6):
+        errors.append(f"Expected between 2 and 6 misconceptions, got {len(misconceptions)}.")
         
     # Check each question
     for idx, q in enumerate(questions):
