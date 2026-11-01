@@ -391,6 +391,82 @@ AMBIGUITY_CATALOG = {
     ]
 }
 
+# Cross-disciplinary homonyms and polysemous terms for generalized contextual interpretation
+DYNAMIC_POLYSEMY_PATTERNS: Dict[str, List[Dict[str, Any]]] = {
+    "crane": [
+        {
+            "id": "crane_mech",
+            "title": "Crane (Heavy Machinery & Construction Rigging)",
+            "discipline": "Mechanical & Civil Engineering",
+            "subdiscipline": "Construction Machinery",
+            "scope": "Hoisting mechanisms, hydraulic booms, load moment indicators, tower cranes, and rigging safety.",
+            "keywords": ["hoist", "pulley", "boom", "hydraulic", "rigging", "cable", "load", "construction", "machine", "steel", "tower"]
+        },
+        {
+            "id": "crane_bio",
+            "title": "Crane (Avian Biology & Gruidae Ecology)",
+            "discipline": "Biological Sciences",
+            "subdiscipline": "Ornithology & Conservation Biology",
+            "scope": "Gruidae taxonomy, wetland ecology, migratory flight aerodynamics, courtship displays, and habitat conservation.",
+            "keywords": ["bird", "gruidae", "feather", "wetland", "migratory", "migration", "whooping", "sandhill", "avian", "nesting", "flock"]
+        }
+    ],
+    "strike": [
+        {
+            "id": "strike_econ",
+            "title": "Labor Strike (Industrial Relations & Collective Bargaining)",
+            "discipline": "Economics & Social Sciences",
+            "subdiscipline": "Labor Economics",
+            "scope": "Work stoppages, union collective bargaining, statutory labor rights, and economic impact of strikes.",
+            "keywords": ["labor", "union", "worker", "bargaining", "wage", "walkout", "employment", "industry", "picket"]
+        },
+        {
+            "id": "strike_geol",
+            "title": "Strike and Dip (Structural Geology & Fault Analysis)",
+            "discipline": "Geological Sciences",
+            "subdiscipline": "Structural Geology",
+            "scope": "Compass direction of horizontal rock stratum lines, dip angles, fault planes, and tectonic deformation.",
+            "keywords": ["geology", "dip", "strata", "fault", "rock", "tectonic", "plane", "horizontal", "bedding", "stratum"]
+        }
+    ],
+    "spring": [
+        {
+            "id": "spring_phys",
+            "title": "Mechanical Spring (Elasticity & Hooke's Law)",
+            "discipline": "Physics & Engineering",
+            "subdiscipline": "Classical Mechanics",
+            "scope": "Restoring forces, Hooke's law, spring constant k, elastic potential energy, and simple harmonic motion.",
+            "keywords": ["hooke", "elastic", "restoring", "force", "constant", "oscillation", "harmonic", "stiffness", "coil"]
+        },
+        {
+            "id": "spring_hydro",
+            "title": "Natural Spring (Hydrogeology & Geothermal Systems)",
+            "discipline": "Earth & Environmental Sciences",
+            "subdiscipline": "Hydrogeology",
+            "scope": "Groundwater aquifer discharge, water table hydrostatic pressure, mineral karst springs, and geothermal emergence.",
+            "keywords": ["water", "aquifer", "hydrogeology", "groundwater", "geothermal", "karst", "artesian", "discharge", "thermal"]
+        }
+    ],
+    "matrix": [
+        {
+            "id": "matrix_math",
+            "title": "Matrix Algebra (Linear Transformations & Determinants)",
+            "discipline": "Mathematics",
+            "subdiscipline": "Linear Algebra",
+            "scope": "Rectangular arrays of numbers, matrix multiplication, determinants, rank, eigenvalues, and eigenvectors.",
+            "keywords": ["linear", "algebra", "vector", "multiplication", "determinant", "eigenvalue", "transformation", "rank", "array"]
+        },
+        {
+            "id": "matrix_bio",
+            "title": "Extracellular Matrix (Cytology & Tissue Architecture)",
+            "discipline": "Biological Sciences",
+            "subdiscipline": "Cell Biology & Histology",
+            "scope": "Macromolecular network of collagen, proteoglycans, integrins, and cell scaffold communication.",
+            "keywords": ["cell", "extracellular", "collagen", "tissue", "integrin", "protein", "histology", "scaffold"]
+        }
+    ]
+}
+
 
 @dataclass
 class TopicInterpretation:
@@ -431,25 +507,38 @@ def normalize_input_topic(topic: str) -> str:
     return t
 
 
-def check_topic_ambiguity(topic_normalized: str, context: str = "") -> Tuple[Optional[List[Dict[str, Any]]], Optional[Dict[str, Any]]]:
+def check_topic_ambiguity(
+    topic_normalized: str,
+    context: str = "",
+    academic_level: str = ""
+) -> Tuple[Optional[List[Dict[str, Any]]], Optional[Dict[str, Any]]]:
     """
-    Checks if topic has multiple distinct academic meanings.
+    Checks if topic has multiple distinct academic meanings using contextual interpretation
+    based on entire topic text, syllabus notes, academic level, and discipline terminology.
     Returns (ambiguity_candidates, resolved_candidate).
-    - If not in catalog: returns (None, None).
-    - If in catalog but context clearly identifies exactly one meaning: returns (candidates, resolved_candidate).
-    - If in catalog and unresolved: returns (candidates, None).
+    - If unambiguous: returns (None, None).
+    - If polysemous but context clearly identifies exactly one meaning: returns (candidates, resolved_candidate).
+    - If polysemous and unresolved: returns (candidates, None).
     """
     low = topic_normalized.lower().strip()
-    combined = f"{low} {context.lower()}".strip()
+    combined = f"{low} {context.lower()} {academic_level.lower()}".strip()
     ctx_words = set(re.findall(r"\b[a-z]{3,}\b", combined))
 
-    for ambig_key, candidates in AMBIGUITY_CATALOG.items():
+    # Merge catalogs (catalog takes priority, supplemented by dynamic polysemy patterns)
+    merged_catalog: Dict[str, List[Dict[str, Any]]] = {}
+    merged_catalog.update(DYNAMIC_POLYSEMY_PATTERNS)
+    merged_catalog.update(AMBIGUITY_CATALOG)
+
+    for ambig_key, candidates in merged_catalog.items():
         if re.search(rf"\b{re.escape(ambig_key)}\b", low):
-            # Check if user already provided disambiguating keywords in title or context
+            # Check if user already provided disambiguating keywords in title, context, or notes
             candidate_scores = []
             for cand in candidates:
                 cand_text = f"{cand.get('title', '')} {cand.get('discipline', '')} {cand.get('subdiscipline', '')} {cand.get('scope', '')}".lower()
                 cand_words = set(re.findall(r"\b[a-z]{3,}\b", cand_text)) - {ambig_key.lower()}
+                extra_kw = set(cand.get("keywords", []))
+                cand_words.update(extra_kw)
+
                 overlap = cand_words & ctx_words
                 if overlap:
                     candidate_scores.append((len(overlap), cand))
@@ -460,6 +549,8 @@ def check_topic_ambiguity(topic_normalized: str, context: str = "") -> Tuple[Opt
             elif len(candidate_scores) > 1:
                 candidate_scores.sort(key=lambda x: x[0], reverse=True)
                 if candidate_scores[0][0] >= 2 and candidate_scores[0][0] > candidate_scores[1][0]:
+                    return candidates, candidate_scores[0][1]
+                if candidate_scores[0][0] > candidate_scores[1][0] and candidate_scores[0][0] >= 2:
                     return candidates, candidate_scores[0][1]
                 return candidates, None
             else:
@@ -479,7 +570,8 @@ class TopicUnderstandingEngine:
         topic: str,
         syllabus_text: str = "",
         force_offline: bool = False,
-        selected_disambiguation: Optional[str] = None
+        selected_disambiguation: Optional[str] = None,
+        academic_level: str = "Introductory"
     ) -> TopicInterpretation:
         """
         Interprets student topic, detecting ambiguities, grounding with evidence,
@@ -490,7 +582,7 @@ class TopicUnderstandingEngine:
             clean_topic = "General Academic Studies"
 
         # 1. Check for polysemous ambiguity unless already resolved by selected_disambiguation
-        ambig_candidates, resolved_cand = check_topic_ambiguity(clean_topic, syllabus_text)
+        ambig_candidates, resolved_cand = check_topic_ambiguity(clean_topic, syllabus_text, academic_level)
         if ambig_candidates and not selected_disambiguation and not resolved_cand:
             return TopicInterpretation(
                 original_query=topic,

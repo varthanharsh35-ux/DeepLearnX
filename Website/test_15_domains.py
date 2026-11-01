@@ -60,18 +60,21 @@ def run_evaluation():
     graph_engine = KnowledgeGraphEngine()
 
     results = []
+    created_domain_ids = []
     total_start = time.time()
 
-    for idx, (topic, domain_class) in enumerate(SAMPLE_TOPICS, 1):
-        print(f"\n[{idx}/15] Testing Topic: '{topic}' ({domain_class})")
-        t0 = time.time()
-        gen_res = syllabus_engine.generate_custom_domain(
-            topic_title=topic,
-            num_questions=12
-        )
-        latency = (time.time() - t0) * 1000
+    try:
+        for idx, (topic, domain_class) in enumerate(SAMPLE_TOPICS, 1):
+            print(f"\n[{idx}/15] Testing Topic: '{topic}' ({domain_class})")
+            t0 = time.time()
+            gen_res = syllabus_engine.generate_custom_domain(
+                topic_title=topic,
+                num_questions=12
+            )
+            latency = (time.time() - t0) * 1000
 
-        domain_id = gen_res["domain_id"]
+            domain_id = gen_res["domain_id"]
+            created_domain_ids.append(domain_id)
         
         # Query generated records from DB
         conn = sqlite3.connect(str(DB_PATH))
@@ -184,28 +187,43 @@ def run_evaluation():
         print(f"  -> Sample Conceptual: {res_entry['sample_conceptual'][:85]}...")
         print(f"  -> Sample Application: {res_entry['sample_application'][:85]}...")
 
-    total_time = time.time() - total_start
-    print("\n" + "=" * 80)
-    print(f"ALL 15 DOMAINS EVALUATED IN {total_time:.2f}s")
-    print("=" * 80)
+        total_time = time.time() - total_start
+        print("\n" + "=" * 80)
+        print(f"ALL 15 DOMAINS EVALUATED IN {total_time:.2f}s")
+        print("=" * 80)
 
-    # Summary table
-    passed_all = True
-    print(f"{'#':<3} | {'Topic':<36} | {'Concepts':<8} | {'Q-Count':<8} | {'Probes':<6} | {'Jargon':<6} | {'Status'}")
-    print("-" * 80)
-    for r in results:
-        status = "PASS" if (r["concepts_count"] >= 3 and r["questions_count"] >= 10 and r["jargon_hits_count"] == 0) else "WARN"
-        if status != "PASS":
-            passed_all = False
-        print(f"{r['index']:<3} | {r['topic']:<36} | {r['concepts_count']:<8} | {r['questions_count']:<8} | {r['probes_count']:<6} | {r['jargon_hits_count']:<6} | {status}")
+        # Summary table
+        passed_all = True
+        print(f"{'#':<3} | {'Topic':<36} | {'Concepts':<8} | {'Q-Count':<8} | {'Probes':<6} | {'Jargon':<6} | {'Status'}")
+        print("-" * 80)
+        for r in results:
+            status = "PASS" if (r["concepts_count"] >= 3 and r["questions_count"] >= 10 and r["jargon_hits_count"] == 0) else "WARN"
+            if status != "PASS":
+                passed_all = False
+            print(f"{r['index']:<3} | {r['topic']:<36} | {r['concepts_count']:<8} | {r['questions_count']:<8} | {r['probes_count']:<6} | {r['jargon_hits_count']:<6} | {status}")
 
-    print("-" * 80)
-    print(f"Overall Test Result: {'ALL 15 DOMAINS PASSED PERFECTLY' if passed_all else 'ATTENTION NEEDED'}")
+        print("-" * 80)
+        print(f"Overall Test Result: {'ALL 15 DOMAINS PASSED PERFECTLY' if passed_all else 'ATTENTION NEEDED'}")
 
-    # Save summary report to JSON
-    with open("scratch_15_domains_evaluation.json", "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2)
-    print("Full evaluation saved to scratch_15_domains_evaluation.json")
+        # Save summary report to JSON
+        with open("scratch_15_domains_evaluation.json", "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2)
+        print("Full evaluation saved to scratch_15_domains_evaluation.json")
+    finally:
+        if created_domain_ids:
+            print(f"\n[Teardown] Cleaning up {len(created_domain_ids)} test domains from database...")
+            conn = sqlite3.connect(str(DB_PATH))
+            for did in created_domain_ids:
+                conn.execute("DELETE FROM student_responses WHERE session_id IN (SELECT id FROM assessment_sessions WHERE domain_id = ?)", (did,))
+                conn.execute("DELETE FROM assessment_sessions WHERE domain_id = ?", (did,))
+                conn.execute("DELETE FROM questions WHERE domain_id = ?", (did,))
+                conn.execute("DELETE FROM misconceptions WHERE domain_id = ?", (did,))
+                conn.execute("DELETE FROM custom_concept_guides WHERE domain_id = ?", (did,))
+                conn.execute("DELETE FROM concepts WHERE domain_id = ?", (did,))
+                conn.execute("DELETE FROM domains WHERE id = ?", (did,))
+            conn.commit()
+            conn.close()
+            print("[Teardown] All test domains and dependent records removed cleanly.")
 
 if __name__ == "__main__":
     run_evaluation()

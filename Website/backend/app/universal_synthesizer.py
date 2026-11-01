@@ -14,6 +14,7 @@ Purpose:
 
 import re
 import random
+import hashlib
 from typing import Dict, List, Tuple, Any, Optional
 
 try:
@@ -509,14 +510,28 @@ def synthesize_universal_questions(
     na = max(1, num_questions - nb - nc)
     tier_plan = ["basic"] * nb + ["conceptual"] * nc + ["application"] * na
 
+    # Stable deterministic seed digest using SHA-256 (not Python's process-salted hash)
+    topic_digest = int(hashlib.sha256(topic.strip().lower().encode("utf-8")).hexdigest()[:8], 16)
+    domain_digest = int(hashlib.sha256(domain_id.strip().encode("utf-8")).hexdigest()[:8], 16)
+    rng = random.Random((seed_offset * 10007) + (domain_digest % 65537) + (topic_digest % 99991))
+
     # Select 4 probe questions dynamically from conceptual and application questions (non-fixed placement)
     potential_probe_indices = [idx for idx, t in enumerate(tier_plan) if t in ("conceptual", "application")]
-    selected_probe_indices = set(random.sample(potential_probe_indices, min(4, len(potential_probe_indices))))
+    selected_probe_indices = set(rng.sample(potential_probe_indices, min(4, len(potential_probe_indices))))
 
-    # Compute pattern offset from topic and seed_offset to guarantee strictly distinct stems across runs
-    base_pattern_offset = (seed_offset * 3 + (abs(hash(topic)) % 12)) % 12
+    # Compute pattern offset deterministically across processes from stable SHA-256 digests
+    base_pattern_offset = (seed_offset * 3 + (domain_digest % 12) + (topic_digest % 12)) % 12
     tier_counters = {"basic": 0, "conceptual": 0, "application": 0}
     seen_stems = set()
+    seen_tokens_list: List[set] = []
+
+    def _stem_tokens(text: str) -> set:
+        return set(re.findall(r'\b[a-z]{3,}\b', text.lower()))
+
+    def _stem_jaccard(tok1: set, tok2: set) -> float:
+        if not tok1 or not tok2:
+            return 0.0
+        return len(tok1 & tok2) / len(tok1 | tok2)
 
     questions = []
     for idx, q_tier in enumerate(tier_plan):
@@ -533,26 +548,39 @@ def synthesize_universal_questions(
 
         q_data = generate_question_item(topic, c_obj, brief["category"], q_tier, idx, facts, q_has_probe, pattern_idx)
 
-        # Enforce strict stem uniqueness across the assessment
-        if q_data["text"] in seen_stems:
+        # Enforce strict stem uniqueness across the assessment (exact + semantic Jaccard >= 0.82)
+        q_tokens = _stem_tokens(q_data["text"])
+        is_duplicate = (q_data["text"] in seen_stems) or any(_stem_jaccard(q_tokens, st) >= 0.82 for st in seen_tokens_list)
+        if is_duplicate:
             for alt_offset in range(1, num_patterns + 1):
                 alt_idx = (pattern_idx + alt_offset) % num_patterns
                 alt_data = generate_question_item(topic, c_obj, brief["category"], q_tier, idx, facts, q_has_probe, alt_idx)
-                if alt_data["text"] not in seen_stems:
+                alt_tokens = _stem_tokens(alt_data["text"])
+                if (alt_data["text"] not in seen_stems) and not any(_stem_jaccard(alt_tokens, st) >= 0.82 for st in seen_tokens_list):
                     q_data = alt_data
+                    q_tokens = alt_tokens
                     break
             else:
-                q_data["text"] = f"[Item {idx+1}] " + q_data["text"]
+                contextual_prefixes = [
+                    f"When examining the operational parameters of {topic}: ",
+                    f"In a diagnostic evaluation of {topic}: ",
+                    f"Under foundational governing principles in {topic}: ",
+                    f"From an introductory analytical standpoint in {topic}: "
+                ]
+                prefix = contextual_prefixes[idx % len(contextual_prefixes)]
+                q_data["text"] = prefix + q_data["text"]
+                q_tokens = _stem_tokens(q_data["text"])
 
         seen_stems.add(q_data["text"])
+        seen_tokens_list.append(q_tokens)
 
-        # Shuffle options while preserving answer key tracking
+        # Shuffle options deterministically with local rng while preserving answer key tracking
         orig_options = q_data["options"]
         orig_corr = q_data["correct"]
         corr_text = orig_options[orig_corr]
 
         opt_items = list(orig_options.values())
-        random.shuffle(opt_items)
+        rng.shuffle(opt_items)
         new_opts = {"A": opt_items[0], "B": opt_items[1], "C": opt_items[2], "D": opt_items[3]}
         new_corr = "A"
         for ltr, txt in new_opts.items():
@@ -565,7 +593,7 @@ def synthesize_universal_questions(
             p_orig_opts = rp_data["options"]
             p_corr_txt = p_orig_opts[rp_data["correct_probe"]]
             p_list = list(p_orig_opts.values())
-            random.shuffle(p_list)
+            rng.shuffle(p_list)
             rp_data["options"] = {"A": p_list[0], "B": p_list[1], "C": p_list[2], "D": p_list[3]}
             for ltr, txt in rp_data["options"].items():
                 if txt == p_corr_txt:

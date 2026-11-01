@@ -97,6 +97,8 @@ class LLMProviderManager:
         self.last_generation_error: Optional[str] = None
         self.last_generation_time: Optional[float] = None
         self.total_live_generations: int = 0
+        self.last_failover_event: Optional[Dict[str, Any]] = None
+        self.failover_history: List[Dict[str, Any]] = []
 
     def reload_config(self) -> None:
         """Reloads configuration from os.environ."""
@@ -223,16 +225,37 @@ class LLMProviderManager:
             if self.fallback_enabled and not api_key_override:
                 secondary_name = "openai" if primary.provider_name == "gemini" else "gemini"
                 secondary = self.get_provider_for_request(provider_name=secondary_name)
+                # Ensure secondary provider is actually configured with valid credentials
                 if secondary and secondary.config.api_key and secondary.config.api_key != primary.config.api_key:
                     logger.info(f"Failing over to secondary provider '{secondary.provider_name}'...")
                     try:
                         res = secondary.generate_structured(schema=schema, prompt=prompt, system_instruction=system_instruction)
+                        failover_record = {
+                            "from_provider": primary.provider_name,
+                            "to_provider": secondary.provider_name,
+                            "primary_error": str(e),
+                            "primary_error_type": type(e).__name__,
+                            "timestamp": time.time(),
+                            "succeeded": True
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
                         self.last_generation_status = "live_generation_succeeded"
                         self.last_generation_error = None
                         self.last_generation_time = time.time()
                         self.total_live_generations += 1
                         return res
                     except Exception as sec_e:
+                        failover_record = {
+                            "from_provider": primary.provider_name,
+                            "to_provider": secondary.provider_name,
+                            "primary_error": str(e),
+                            "secondary_error": str(sec_e),
+                            "timestamp": time.time(),
+                            "succeeded": False
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
                         logger.error(f"Secondary fallback provider '{secondary.provider_name}' also failed: {sec_e}")
             self.last_generation_status = "provider_unavailable"
             self.last_generation_error = str(e)
@@ -277,12 +300,32 @@ class LLMProviderManager:
                 if secondary and secondary.config.api_key and secondary.config.api_key != primary.config.api_key:
                     try:
                         res = secondary.generate_text(prompt=prompt, system_instruction=system_instruction)
+                        failover_record = {
+                            "from_provider": primary.provider_name,
+                            "to_provider": secondary.provider_name,
+                            "primary_error": str(e),
+                            "primary_error_type": type(e).__name__,
+                            "timestamp": time.time(),
+                            "succeeded": True
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
                         self.last_generation_status = "live_generation_succeeded"
                         self.last_generation_error = None
                         self.last_generation_time = time.time()
                         self.total_live_generations += 1
                         return res
                     except Exception as sec_e:
+                        failover_record = {
+                            "from_provider": primary.provider_name,
+                            "to_provider": secondary.provider_name,
+                            "primary_error": str(e),
+                            "secondary_error": str(sec_e),
+                            "timestamp": time.time(),
+                            "succeeded": False
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
                         logger.error(f"Secondary text provider '{secondary.provider_name}' failed: {sec_e}")
             self.last_generation_status = "provider_unavailable"
             self.last_generation_error = str(e)
@@ -297,19 +340,45 @@ class LLMProviderManager:
         mode: str,
         provider: Optional[str] = None,
         model: Optional[str] = None,
-        stages: Optional[Dict[str, str]] = None
+        stages: Optional[Dict[str, str]] = None,
+        failover_occurred: bool = False,
+        original_provider: Optional[str] = None
     ) -> Dict[str, Any]:
         """Constructs normalized, verifiable stage-level generation provenance."""
         st = stages or {}
+        t_src = st.get("topic_interpretation_source", mode)
+        c_src = st.get("concept_generation_source", mode)
+        d_src = st.get("dag_generation_source", c_src)
+        q_src = st.get("question_generation_source", mode)
+        p_src = st.get("probe_generation_source", mode)
+        r_src = st.get("remedial_generation_source", mode)
+
+        all_sources = [t_src, c_src, d_src, q_src, p_src, r_src]
+        has_live = any("live_llm" in str(s) for s in all_sources)
+        has_offline = any(s in ("offline_synthesizer", "offline_knowledge_synthesis", "deterministic_dag_engine", "deterministic_taxonomy_engine") for s in all_sources)
+        has_curated = any("curated" in str(s) for s in all_sources)
+
+        if has_live and not has_offline and not has_curated:
+            computed_mode = "live_llm"
+        elif has_live and (has_offline or has_curated):
+            computed_mode = "hybrid"
+        elif has_curated and not has_live:
+            computed_mode = "curated_retrieval"
+        else:
+            computed_mode = "offline_knowledge_synthesis"
+
         return {
-            "overall_mode": mode,
+            "overall_mode": mode if mode in ("live_llm", "offline_knowledge_synthesis", "hybrid") else computed_mode,
             "provider": provider,
             "model": model,
-            "topic_interpretation_source": st.get("topic_interpretation_source", mode),
-            "concept_generation_source": st.get("concept_generation_source", mode),
-            "question_generation_source": st.get("question_generation_source", mode),
-            "probe_generation_source": st.get("probe_generation_source", mode),
-            "remedial_generation_source": st.get("remedial_generation_source", mode),
+            "topic_interpretation_source": t_src,
+            "concept_generation_source": c_src,
+            "dag_generation_source": d_src,
+            "question_generation_source": q_src,
+            "probe_generation_source": p_src,
+            "remedial_generation_source": r_src,
+            "failover_occurred": failover_occurred or bool(self.last_failover_event and self.last_failover_event.get("succeeded")),
+            "original_provider": original_provider or (self.last_failover_event.get("from_provider") if self.last_failover_event else None),
             "timestamp": time.time()
         }
 
@@ -388,6 +457,7 @@ class LLMProviderManager:
             "message": msg,
             "last_generation_status": self.last_generation_status,
             "last_generation_error": self.last_generation_error,
+            "last_failover_event": self.last_failover_event,
             "total_live_generations": self.total_live_generations,
             "providers": {
                 "gemini": gemini_health.to_dict(),

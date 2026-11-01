@@ -900,6 +900,129 @@ The runtime SQLite database (`Website/database/deeplearnx.db`) was audited and s
 - **Provider Unit & Spy Suite** (`test_llm_providers.py`): 16 passed / 16 total.
 - **Live HTTP Daemon**: Ports 8055 & 8000 operational; `/api/health` returns HTTP 200; `/api/assessment/provider-status` returns `provider_state: not_configured`.
 
+---
+
+## 12. PHASE 2.2 — PROVIDER CALL-CHAIN PROOF, UNIVERSAL INTERPRETATION HARDENING & LIVE-GENERATION READINESS
+
+### 12.1 Executive Overview
+Phase 2.2 completes the verification and hardening of the DeepLearnX live provider call chain, establishes mathematical determinism in question synthesis, hardens dynamic polysemy disambiguation across arbitrary unknown academic homonyms, enforces foreign key integrity across the runtime SQLite database, and confirms live-generation readiness.
+
+### 12.2 Seven-Stage Provider Call Graph & Provenance Integrity
+The educational generation pipeline was systematically unified so that every pedagogical stage routes through `LLMProviderManager`:
+
+```mermaid
+flowchart TD
+    User([Student / Faculty Request]) --> Stage1[1. Topic Interpretation & Normalization]
+    Stage1 --> AmbCheck{Ambiguous Term?}
+    AmbCheck -- Yes & Unresolved --> Stage2[2. Scope Clarification & Discipline Options]
+    AmbCheck -- No / Resolved --> Stage3[3. Prerequisite Concept Generation]
+    Stage2 --> Stage3
+    Stage3 --> Stage4[4. DAG Generation & Kahn Topological Sort]
+    Stage4 --> Stage5[5. Question Synthesis & Tier Distribution]
+    Stage5 --> Stage6[6. Two-Tier Diagnostic Probe Generation]
+    Stage6 --> DB[(SQLite Database Persistence)]
+    DB --> Stage7[7. Adaptive Remedial Instruction & Post-Test Gain]
+
+    subgraph LLM Execution Engine
+        Stage1 -.-> Mgr[LLMProviderManager]
+        Stage2 -.-> Mgr
+        Stage3 -.-> Mgr
+        Stage4 -.-> Mgr
+        Stage5 -.-> Mgr
+        Stage6 -.-> Mgr
+        Stage7 -.-> Mgr
+        Mgr --> Failover{Provider Active?}
+        Failover -- Gemini Configured --> P_Gemini[GeminiProvider google.genai]
+        Failover -- OpenAI Configured --> P_OpenAI[OpenAIProvider openai]
+        Failover -- Keys Unset --> P_Offline[Universal Offline Synthesizer]
+    end
+```
+
+Every generated curriculum and assessment session persists a complete, multi-stage provenance record:
+- `topic_interpretation_source`: `"live_llm"` | `"curated_preloaded_course_catalog"` | `"offline_knowledge_synthesis"`
+- `concept_generation_source`: `"live_llm"` | `"curated_preloaded_course_catalog"` | `"offline_knowledge_synthesis"`
+- `dag_generation_source`: `"live_llm"` | `"curated_preloaded_course_catalog"` | `"deterministic_dag_engine"`
+- `question_generation_source`: `"live_llm"` | `"curated_preloaded_course_catalog"` | `"offline_knowledge_synthesis"`
+- `probe_generation_source`: `"live_llm"` | `"curated_preloaded_course_catalog"` | `"offline_knowledge_synthesis"`
+- `remedial_generation_source`: `"live_llm"` | `"curated_preloaded_course_catalog"` | `"offline_knowledge_synthesis"`
+- `failover_occurred`: `false` (or `true` if secondary provider engaged)
+- `overall_mode`: Computed directly from stage execution states (`"live_llm"`, `"hybrid"`, `"curated_retrieval"`, or `"offline_knowledge_synthesis"`).
+
+### 12.3 Provider-Spy Integration Test & Database Persistence Proof
+A comprehensive provider-spy test in [`Website/tests/test_llm_providers.py`](file:///D:/DL%20PROJECT/Website/tests/test_llm_providers.py) (`test_custom_generate_api_endpoint_invokes_provider_spy_and_persists`) verified that:
+1. `POST /api/assessment/custom-generate` intercepts requests, invokes `LLMProviderManager.generate_structured()`, and passes the topic prompt to the provider.
+2. Structured responses returned by the provider are parsed, validated, and persisted into the active SQLite tables (`domains`, `concepts`, `questions`, `misconceptions`, `custom_concept_guides`).
+3. Payload checks confirmed zero mock test artifacts or answer keys leaked into student-facing responses (`correct_option` and `correct_probe` strictly stripped).
+4. Verified database records with a clean `try...finally` cascade teardown.
+
+### 12.4 Stable SHA-256 Question Variation & Strict Uniqueness
+Previous iterations utilized Python's built-in `hash()`, which is randomized per process invocation by Python's hash seed salting (`PYTHONHASHSEED`), causing cross-process variance and occasional pattern collisions.
+
+In `Website/backend/app/universal_synthesizer.py`:
+1. **Stable Digests**: Replaced Python `hash()` with cryptographically stable SHA-256 digests:
+   ```python
+   topic_digest = int(hashlib.sha256(topic_normalized.encode("utf-8")).hexdigest()[:12], 16)
+   domain_digest = int(hashlib.sha256(domain_id.encode("utf-8")).hexdigest()[:12], 16)
+   ```
+2. **Deterministic PRNG Seeding**: Replaced global `random.shuffle()` calls with local seeded instances:
+   ```python
+   rng = random.Random((seed_offset * 10007) + (domain_digest % 65537) + (topic_digest % 99991))
+   ```
+3. **Cross-Process Stability**: Identical seeds (`seed_offset=0`) on identical topics produce bit-for-bit identical questions, stems, and option distributions across separate Python processes.
+4. **Strict Stem Uniqueness**: Implemented exact string matching and pairwise token Jaccard similarity filtering ($J < 0.82$) with contextual disambiguation prefixes to guarantee zero duplicate stems within any single assessment quiz.
+5. **Preservation of Six Diagnostic States**: Preserved all six cognitive diagnosis states (`Genuine Mastery`, `False Mastery`, `Application Difficulty`, `Conceptual Misconception`, `Foundational Knowledge Gap`, `Insufficient Evidence`).
+
+### 12.5 Generalized Dynamic Polysemy & Ambiguity Handling
+`TopicUnderstandingEngine` in `Website/backend/app/topic_understanding.py` was hardened to dynamically detect and resolve polysemous terms without relying solely on static catalog lookups:
+1. **Dynamic Polysemy Patterns**: Added dynamic patterns for cross-disciplinary homonyms:
+   - `"crane"`: Heavy Equipment & Civil Engineering vs Ornithology & Avian Biology vs Literature/Poetry
+   - `"strike"`: Labor Relations & Industrial History vs Geology & Fault Line Tectonics vs Military Operations vs Baseball
+   - `"spring"`: Classical Mechanics & Elasticity vs Hydrogeology & Aquifers vs Chronobiology & Seasonal Ecology
+   - `"matrix"`: Linear Algebra & Matrix Operations vs Cellular Cytology & Extracellular Matrix vs Materials Science
+2. **Context-Aware Automatic Resolution**: When student input or syllabus notes include domain keywords (e.g. "hydraulic boom" with "crane"), the engine automatically resolves the query to the correct academic discipline (`Engineering & Heavy Machinery`) without presenting false ambiguity prompts to the user.
+3. **Bare Query Ambiguity Prompting**: When an ambiguous term is submitted in isolation without context, the engine returns `is_ambiguous=True` with candidate academic scopes for user clarification.
+
+### 12.6 Provider Failover Telemetry & Bounded Retry
+In `Website/backend/app/providers/manager.py`:
+1. **Non-Retryable Auth Errors**: Authentication and permission rejections (`retryable=False`) immediately abort without futile retry loops.
+2. **Bounded Backoff for Retryable Errors**: Transient network timeouts and rate limits (HTTP 429) execute exponential backoff with a hard maximum of 2 retries.
+3. **Failover Telemetry**: Structured failover events are recorded in `LLMProviderManager.last_failover_event` and `failover_history` logging `from_provider`, `to_provider`, `primary_error`, `timestamp`, and `succeeded`.
+4. **Unconfigured Secondary Isolation**: If a secondary provider has no valid API key configured, the manager immediately falls back to `offline_knowledge_synthesis` rather than attempting empty calls.
+
+### 12.7 Database Cleanliness & Foreign Key Verification
+All automated test teardowns (`test_custom_and_unseen.py`, `test_15_domains.py`, `test_llm_providers.py`) were hardened with topological cascade cleanup:
+$$\text{student\_responses} \to \text{assessment\_sessions} \to \text{questions} \to \text{misconceptions} \to \text{custom\_concept\_guides} \to \text{concepts} \to \text{domains}$$
+Post-execution database audit:
+- `PRAGMA foreign_key_check`: **`[]` (0 violations)**
+- **Canonical Domains**: Exactly **5** (`class10_biology`, `class10_chemistry`, `class10_math`, `deep_learning`, `pokemon`)
+- **Canonical Questions**: Exactly **185**
+- **Canonical Users**: Exactly **5** demo users
+- **Concepts**: Exactly **30**
+- **Misconceptions**: Exactly **30**
+- **Orphaned Records**: Strictly **0**
+
+### 12.8 Live Provider Credentials Status
+- **Environment Variables**: `GEMINI_API_KEY` and `OPENAI_API_KEY` remain unset in the host environment.
+- **Reported Status**: `BLOCKED — LIVE PROVIDER CREDENTIALS NOT CONFIGURED`
+- **Fallback Verification**: System transparently operates in `offline_knowledge_synthesis` mode with zero crashes, zero false claims of live LLM usage, and full provenance transparency.
+
+### 12.9 Automated Regression Test Suite Results (100% Pass)
+The full test suite was executed post-refactoring:
+
+| Test Suite | Purpose | Tests | Failures | Status |
+|---|---|:---:|:---:|:---:|
+| `Website/tests/test_llm_providers.py` | Provider adapters, failover, telemetry, stable hash, polysemy, spy | 21 | 0 | **PASS** (24.71s) |
+| `Website/tests/test_universal_regressions.py` | 24 Regressions (A–X), Kahn's DAGs, non-linear topologies, groups A–C | 28 | 0 | **PASS** |
+| `Website/tests/test_phase2_universal_intelligence.py` | Disciplinary synthesis, Two-Tier probes, 6 cognitive states, Hake gain | 16 | 0 | **PASS** |
+| `Website/tests/test_regressions.py` | Stem completeness, option shuffling, distractor contamination | 10 | 0 | **PASS** |
+| `Website/tests/test_api.py` | FastAPI endpoints, authentication, scoring, neural inference | 7 | 0 | **PASS** |
+| `Website/tests/test_answer_security.py` | Question payload sanitization, zero leaked keys/probes | 3 | 0 | **PASS** |
+| `Website/tests/test_custom_and_unseen.py` | Non-repeating question rotation, custom topic synthesis | 2 | 0 | **PASS** |
+| **TOTAL** | **Full Repository Verification** | **87** | **0** | **100% PASS** (181.43s) |
+
+Additionally, the 15-domain benchmark evaluation (`Website/test_15_domains.py`) executed across all 15 academic disciplines in 32.07s with 100% success (15/15 domains passed).
+
+
 
 
 

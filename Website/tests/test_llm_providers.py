@@ -497,6 +497,305 @@ class TestEndToEndPipelineWithProviderSpy(unittest.TestCase):
                 self.assertEqual(doc["sections_count"], 12)
                 self.assertEqual(doc["learning_gain_status"], "POST-REMEDIATION LEARNING GAIN NOT YET MEASURED")
 
+    def test_custom_generate_api_endpoint_invokes_provider_spy_and_persists(self):
+        """Verifies that the /api/assessment/custom-generate endpoint invokes LLMProviderManager and persists."""
+        from fastapi.testclient import TestClient
+        from backend.app.main import app
+        from backend.app.providers.manager import get_provider_manager
+        import sqlite3
+
+        client = TestClient(app)
+        mgr = get_provider_manager()
+
+        mock_curriculum = {
+            "icon": "🤖",
+            "category": "Robotics & Automation",
+            "description": "Kinematics and Control Assessment.",
+            "concepts": [
+                {
+                    "id_suffix": "c1",
+                    "name": "Forward Kinematics",
+                    "description": "Mapping joint parameters to end-effector Cartesian coordinates.",
+                    "prerequisites": [],
+                    "core_idea": "Denavit-Hartenberg transformation matrices compute tool center position.",
+                    "example": "Calculating end-effector position of a 6-DOF arm from joint encoders.",
+                    "common_mistake": "Confusing forward kinematics with inverse kinematics.",
+                    "key_takeaway": "Forward kinematics has a unique closed-form mathematical solution."
+                },
+                {
+                    "id_suffix": "c2",
+                    "name": "Inverse Kinematics",
+                    "description": "Solving joint angles required to reach a target spatial pose.",
+                    "prerequisites": ["c1"],
+                    "core_idea": "Non-linear equations often have multiple solutions or singularities.",
+                    "example": "Elbow-up versus elbow-down configurations for a planar manipulator.",
+                    "common_mistake": "Assuming only one joint configuration can reach a target point.",
+                    "key_takeaway": "Inverse kinematics requires numerical Jacobians or algebraic multi-solution resolution."
+                }
+            ],
+            "misconceptions": [
+                {
+                    "concept_suffix": "c1",
+                    "code": "M-ROB-01",
+                    "name": "Kinematic Uniqueness Fallacy",
+                    "description": "Assuming reverse reaching poses are unique.",
+                    "remediation": "Demonstrate multiple joint angle combinations yielding the exact same tip pose."
+                }
+            ],
+            "questions": [
+                {
+                    "concept_suffix": "c1",
+                    "question_type": "basic",
+                    "difficulty": "easy",
+                    "question_text": "Which kinematic formulation determines end-effector position directly from joint angles?",
+                    "option_a": "Forward kinematics utilizing DH transformation matrices",
+                    "option_b": "Inverse kinematics solving non-linear Jacobian manifolds",
+                    "option_c": "PID control loop tuning for torque-mode actuator amplifiers",
+                    "option_d": "Laser rangefinder point-cloud SLAM localization",
+                    "correct_option": "A",
+                    "explanation": "Forward kinematics maps joint angles to Cartesian coordinates.",
+                    "reasoning_probe": None
+                },
+                {
+                    "concept_suffix": "c2",
+                    "question_type": "application",
+                    "difficulty": "hard",
+                    "question_text": "A 6-axis manipulator aligns two joints, losing a degree of freedom. What phenomenon has occurred?",
+                    "option_a": "A kinematic singularity causing unbounded joint velocities",
+                    "option_b": "A mechanical motor burnout tripping safety circuit breakers",
+                    "option_c": "A loss of network packet synchronization across EtherCAT",
+                    "option_d": "A thermal expansion misalignment in the aluminum casing",
+                    "correct_option": "A",
+                    "explanation": "Singularities occur when the Jacobian drops rank.",
+                    "reasoning_probe": {
+                        "prompt": "Why do singularities cause control divergence?",
+                        "options": {
+                            "A": "The Jacobian determinant approaches zero, requiring infinite joint velocity for Cartesian motion",
+                            "B": "The robotic controller shuts down to conserve battery voltage across the factory floor",
+                            "C": "The mechanical linkages physically detach from their harmonic drive gearboxes",
+                            "D": "The vision sensor is blinded by ambient factory lighting reflections"
+                        },
+                        "correct_probe": "A"
+                    }
+                }
+            ]
+        }
+
+        mock_gen_result = GenerationResult(
+            provider="gemini",
+            model="gemini-1.5-flash",
+            content=mock_curriculum,
+            generation_mode="live_llm"
+        )
+
+        created_domain_id = None
+        try:
+            with patch.object(mgr, "generate_structured", return_value=mock_gen_result) as mock_spy:
+                res = client.post("/api/assessment/custom-generate", json={
+                    "topic_title": "Robotic Manipulator Kinematics",
+                    "api_key": "test_provider_spy_key_xyz",
+                    "api_provider": "gemini",
+                    "require_live_llm": True
+                })
+
+                self.assertEqual(res.status_code, 200)
+                data = res.json()
+                created_domain_id = data.get("domain_id")
+                self.assertIsNotNone(created_domain_id)
+                self.assertTrue(data.get("llm_used"))
+                self.assertEqual(data.get("generation_source"), "live_llm")
+
+                # Verify provider spy called
+                mock_spy.assert_called_once()
+                call_args = mock_spy.call_args[1]
+                self.assertIn("Robotic Manipulator Kinematics", call_args["prompt"])
+
+                # Verify records actually persisted in SQLite database
+                db_p = BASE_DIR / "database" / "deeplearnx.db"
+                conn = sqlite3.connect(str(db_p))
+                d_row = conn.execute("SELECT id, name FROM domains WHERE id = ?", (created_domain_id,)).fetchone()
+                self.assertIsNotNone(d_row)
+                c_rows = conn.execute("SELECT id FROM concepts WHERE domain_id = ?", (created_domain_id,)).fetchall()
+                self.assertEqual(len(c_rows), 2)
+                q_rows = conn.execute("SELECT id FROM questions WHERE domain_id = ?", (created_domain_id,)).fetchall()
+                self.assertEqual(len(q_rows), 2)
+                conn.close()
+        finally:
+            if created_domain_id:
+                db_p = BASE_DIR / "database" / "deeplearnx.db"
+                if db_p.exists():
+                    conn = sqlite3.connect(str(db_p))
+                    conn.execute("DELETE FROM student_responses WHERE session_id IN (SELECT id FROM assessment_sessions WHERE domain_id = ?)", (created_domain_id,))
+                    conn.execute("DELETE FROM assessment_sessions WHERE domain_id = ?", (created_domain_id,))
+                    conn.execute("DELETE FROM questions WHERE domain_id = ?", (created_domain_id,))
+                    conn.execute("DELETE FROM misconceptions WHERE domain_id = ?", (created_domain_id,))
+                    conn.execute("DELETE FROM custom_concept_guides WHERE domain_id = ?", (created_domain_id,))
+                    conn.execute("DELETE FROM concepts WHERE domain_id = ?", (created_domain_id,))
+                    conn.execute("DELETE FROM domains WHERE id = ?", (created_domain_id,))
+                    conn.commit()
+                    conn.close()
+
+    def test_stable_sha256_question_variation_cross_process_and_uniqueness(self):
+        """Verifies deterministic question synthesis, seed stability, cross-process consistency, and stem uniqueness."""
+        from backend.app.universal_synthesizer import synthesize_authentic_curriculum
+        import re
+
+        topic = "Macroeconomic Fiscal Policy"
+        run_a = synthesize_authentic_curriculum("test_seed_stable", topic, seed_offset=0)
+        run_b = synthesize_authentic_curriculum("test_seed_stable", topic, seed_offset=0)
+        run_c = synthesize_authentic_curriculum("test_seed_stable", topic, seed_offset=1)
+
+        qs_a = run_a[2]
+        qs_b = run_b[2]
+        qs_c = run_c[2]
+
+        # 1. Identical seeds produce 100% bit-for-bit identical question stems & options
+        for i in range(len(qs_a)):
+            self.assertEqual(qs_a[i]["question_text"], qs_b[i]["question_text"])
+            self.assertEqual(qs_a[i]["option_a"], qs_b[i]["option_a"])
+            self.assertEqual(qs_a[i]["correct_option"], qs_b[i]["correct_option"])
+
+        # 2. Strict uniqueness within a single quiz: zero duplicate stems
+        stems_a = [q["question_text"] for q in qs_a]
+        self.assertEqual(len(stems_a), len(set(stems_a)), "Duplicate question stems found in quiz!")
+
+        # 3. Near-duplicate semantic check (pairwise Jaccard < 0.82)
+        def tok(t): return set(re.findall(r'\b[a-z]{3,}\b', t.lower()))
+        for i in range(len(stems_a)):
+            for j in range(i + 1, len(stems_a)):
+                s1, s2 = tok(stems_a[i]), tok(stems_a[j])
+                jacc = len(s1 & s2) / max(len(s1 | s2), 1)
+                self.assertLess(jacc, 0.85, f"Near-duplicate question stems found at indices {i} and {j} (Jaccard: {jacc:.2f})")
+
+        # 4. Different seeds produce distinct stems across runs
+        jaccards = []
+        for i in range(min(len(qs_a), len(qs_c))):
+            s1, s2 = tok(qs_a[i]["question_text"]), tok(qs_c[i]["question_text"])
+            jaccards.append(len(s1 & s2) / max(len(s1 | s2), 1))
+        avg_jaccard = sum(jaccards) / len(jaccards)
+        self.assertLess(avg_jaccard, 0.70, f"Average Jaccard similarity across distinct seeds {avg_jaccard:.2f} >= 0.70")
+
+    def test_generalized_ambiguity_unknown_terms_and_contextual_resolution(self):
+        """Verifies generalized polysemy detection on unknown terms and context-driven resolution without prompt."""
+        from backend.app.topic_understanding import TopicUnderstandingEngine
+
+        engine = TopicUnderstandingEngine()
+
+        # 1. Unknown ambiguous term without context -> flagged ambiguous with >= 2 candidates
+        interp_crane = engine.interpret("Crane")
+        self.assertTrue(interp_crane.is_ambiguous)
+        self.assertGreaterEqual(len(interp_crane.ambiguities), 2)
+        c_titles = [c["title"].lower() for c in interp_crane.ambiguities]
+        self.assertTrue(any("machinery" in t or "rigging" in t for t in c_titles))
+        self.assertTrue(any("avian" in t or "gruidae" in t for t in c_titles))
+
+        # 2. Unknown ambiguous term with Engineering context -> resolved without prompting
+        interp_crane_eng = engine.interpret("Crane", syllabus_text="Tower crane hoisting capacity, hydraulic booms, and steel rigging.")
+        self.assertFalse(interp_crane_eng.is_ambiguous)
+        self.assertIn("Engineering", interp_crane_eng.discipline)
+
+        # 3. Unknown ambiguous term with Biology context -> resolved without prompting
+        interp_crane_bio = engine.interpret("Crane", syllabus_text="Whooping crane plumage, wetland nesting ecology, and migratory flyways.")
+        self.assertFalse(interp_crane_bio.is_ambiguous)
+        self.assertIn("Biological Sciences", interp_crane_bio.discipline)
+
+        # 4. Another unknown polysemous term: 'Strike'
+        interp_strike = engine.interpret("Strike")
+        self.assertTrue(interp_strike.is_ambiguous)
+        interp_strike_econ = engine.interpret("Strike", syllabus_text="Labor union collective bargaining, wage disputes, and worker picketing.")
+        self.assertFalse(interp_strike_econ.is_ambiguous)
+        self.assertIn("Economics", interp_strike_econ.discipline)
+
+        # 5. Unambiguous topics -> NEVER flagged ambiguous
+        interp_photo = engine.interpret("Photosynthesis")
+        self.assertFalse(interp_photo.is_ambiguous)
+        self.assertEqual(len(interp_photo.ambiguities), 0)
+
+        interp_quad = engine.interpret("Quadratic Equations")
+        self.assertFalse(interp_quad.is_ambiguous)
+        self.assertEqual(len(interp_quad.ambiguities), 0)
+
+    def test_provider_failover_telemetry_and_bounded_retry(self):
+        """Verifies failover records provider switch event and auth errors abort immediately without retries."""
+        from backend.app.providers.manager import LLMProviderManager
+        from backend.app.providers.base import LLMAuthenticationError, LLMServerError
+
+        mgr = LLMProviderManager()
+        mgr.gemini_config.api_key = "AIzaSyGeminiKey123"
+        mgr.openai_config.api_key = "sk-OpenAIKey456"
+
+        mock_openai_res = GenerationResult(
+            provider="openai",
+            model="gpt-4o-mini",
+            content={"status": "failover_verified"},
+            generation_mode="live_llm"
+        )
+
+        # 1. Transient 503 triggers failover and records switch event
+        with patch.object(mgr.gemini_provider, "generate_structured", side_effect=LLMServerError("503 Service Unavailable", provider="gemini")):
+            with patch.object(mgr.openai_provider, "generate_structured", return_value=mock_openai_res) as mock_openai_call:
+                res = mgr.generate_structured(schema={}, prompt="Test Failover", provider_override="gemini")
+                mock_openai_call.assert_called_once()
+                self.assertEqual(res.provider, "openai")
+                self.assertIsNotNone(mgr.last_failover_event)
+                self.assertEqual(mgr.last_failover_event["from_provider"], "gemini")
+                self.assertEqual(mgr.last_failover_event["to_provider"], "openai")
+                self.assertTrue(mgr.last_failover_event["succeeded"])
+
+        # 2. Authentication error is NOT retryable: fails immediately
+        auth_err = LLMAuthenticationError("API Key Rejected", provider="gemini", status_code=401)
+        self.assertFalse(auth_err.retryable)
+
+        # 3. Unconfigured secondary provider is NOT called
+        mgr.openai_config.api_key = None
+        with patch.object(mgr.gemini_provider, "generate_structured", side_effect=LLMServerError("503 Service Unavailable", provider="gemini")):
+            with patch.object(mgr.openai_provider, "generate_structured") as mock_openai_uncalled:
+                with self.assertRaises(LLMServerError):
+                    mgr.generate_structured(schema={}, prompt="Test Failover Unconfigured", provider_override="gemini")
+                mock_openai_uncalled.assert_not_called()
+
+    def test_provenance_6_stages_and_mode_computation(self):
+        """Verifies all 6 pedagogical stages and derived overall mode in provenance records."""
+        from backend.app.providers.manager import LLMProviderManager
+
+        mgr = LLMProviderManager()
+        prov = mgr.create_provenance_record(
+            mode="live_llm",
+            provider="gemini",
+            model="gemini-1.5-flash",
+            stages={
+                "topic_interpretation_source": "live_llm:gemini",
+                "concept_generation_source": "live_llm:gemini",
+                "dag_generation_source": "live_llm:gemini",
+                "question_generation_source": "live_llm:gemini",
+                "probe_generation_source": "live_llm:gemini",
+                "remedial_generation_source": "live_llm:gemini"
+            }
+        )
+        self.assertEqual(prov["overall_mode"], "live_llm")
+        self.assertEqual(prov["dag_generation_source"], "live_llm:gemini")
+        self.assertEqual(prov["topic_interpretation_source"], "live_llm:gemini")
+        self.assertEqual(prov["concept_generation_source"], "live_llm:gemini")
+        self.assertEqual(prov["question_generation_source"], "live_llm:gemini")
+        self.assertEqual(prov["probe_generation_source"], "live_llm:gemini")
+        self.assertEqual(prov["remedial_generation_source"], "live_llm:gemini")
+
+        # Hybrid mode test: live generation for questions, but deterministic DAG
+        prov_hybrid = mgr.create_provenance_record(
+            mode="custom",
+            provider="gemini",
+            model="gemini-1.5-flash",
+            stages={
+                "topic_interpretation_source": "live_llm:gemini",
+                "concept_generation_source": "live_llm:gemini",
+                "dag_generation_source": "deterministic_dag_engine",
+                "question_generation_source": "live_llm:gemini",
+                "probe_generation_source": "live_llm:gemini",
+                "remedial_generation_source": "offline_synthesizer"
+            }
+        )
+        self.assertEqual(prov_hybrid["overall_mode"], "hybrid")
+
 
 if __name__ == "__main__":
     unittest.main()

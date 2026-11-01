@@ -1653,6 +1653,7 @@ class SyllabusGeneratorEngine:
                 stages={
                     "topic_interpretation_source": "live_llm" if llm_used else "curated_preloaded_course_catalog",
                     "concept_generation_source": "live_llm" if llm_used else "curated_preloaded_course_catalog",
+                    "dag_generation_source": "live_llm" if llm_used else "curated_preloaded_course_catalog",
                     "question_generation_source": "live_llm" if llm_used else "curated_preloaded_course_catalog",
                     "probe_generation_source": "live_llm" if llm_used else "curated_preloaded_course_catalog",
                     "remedial_generation_source": "live_llm" if llm_used else "curated_preloaded_course_catalog",
@@ -1684,10 +1685,11 @@ class SyllabusGeneratorEngine:
                 model=None,
                 stages={
                     "topic_interpretation_source": "offline_knowledge_synthesis",
-                    "concept_generation_source": "offline_knowledge_synthesis",
-                    "question_generation_source": "offline_knowledge_synthesis",
-                    "probe_generation_source": "offline_knowledge_synthesis",
-                    "remedial_generation_source": "offline_knowledge_synthesis",
+                    "concept_generation_source": "offline_synthesizer",
+                    "dag_generation_source": "deterministic_dag_engine",
+                    "question_generation_source": "offline_synthesizer",
+                    "probe_generation_source": "offline_synthesizer",
+                    "remedial_generation_source": "offline_synthesizer",
                 }
             )
             return res
