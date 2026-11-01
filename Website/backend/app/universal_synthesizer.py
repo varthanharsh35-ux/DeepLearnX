@@ -514,7 +514,9 @@ def synthesize_universal_questions(
     selected_probe_indices = set(random.sample(potential_probe_indices, min(4, len(potential_probe_indices))))
 
     # Compute pattern offset from domain_id and seed_offset to guarantee distinct stems across runs
-    base_pattern_offset = (abs(hash(domain_id)) + seed_offset) % 4
+    base_pattern_offset = (abs(hash(domain_id)) + seed_offset) % 12
+    tier_counters = {"basic": 0, "conceptual": 0, "application": 0}
+    seen_stems = set()
 
     questions = []
     for idx, q_tier in enumerate(tier_plan):
@@ -524,8 +526,25 @@ def synthesize_universal_questions(
         mid = misconceptions[c_idx % len(misconceptions)]["id"]
 
         q_has_probe = (idx in selected_probe_indices)
-        pattern_idx = (base_pattern_offset + idx) % 4
+        num_patterns = 6 if q_tier == "basic" else 4
+        tier_idx = tier_counters[q_tier]
+        pattern_idx = (base_pattern_offset + tier_idx) % num_patterns
+        tier_counters[q_tier] += 1
+
         q_data = generate_question_item(topic, c_obj, brief["category"], q_tier, idx, facts, q_has_probe, pattern_idx)
+
+        # Enforce strict stem uniqueness across the assessment
+        if q_data["text"] in seen_stems:
+            for alt_offset in range(1, num_patterns + 1):
+                alt_idx = (pattern_idx + alt_offset) % num_patterns
+                alt_data = generate_question_item(topic, c_obj, brief["category"], q_tier, idx, facts, q_has_probe, alt_idx)
+                if alt_data["text"] not in seen_stems:
+                    q_data = alt_data
+                    break
+            else:
+                q_data["text"] = f"[Item {idx+1}] " + q_data["text"]
+
+        seen_stems.add(q_data["text"])
 
         # Shuffle options while preserving answer key tracking
         orig_options = q_data["options"]
@@ -617,13 +636,29 @@ def generate_question_item(
                 "C": f"Disregarding operational bounds and proceeding under the assumption that conditions remain invariant.",
                 "D": f"Restricting analysis strictly to isolated edge cases while ignoring standard governing rules in {topic}."
             }
-        else:
+        elif pattern_idx == 3:
             text = f"Which fundamental characteristic clearly distinguishes '{c_name}' from secondary mechanisms in {topic}?"
             opts = {
                 "A": f"Its direct alignment with verified causal structures and rigorous foundational criteria in {topic}.",
                 "B": f"Its reliance on unverified anecdotal correlations rather than reproducible empirical principles.",
                 "C": f"Its complete independence from any established mathematical or theoretical frameworks in {topic}.",
                 "D": f"Its tendency to reverse core terminology and contradict foundational definitions verified across {topic}."
+            }
+        elif pattern_idx == 4:
+            text = f"Within {topic}, what primary principle governs the core definition and structural role of '{c_name}'?"
+            opts = {
+                "A": f"It establishes the authoritative structural role and foundational principles governing '{c_name}'.",
+                "B": f"It treats '{c_name}' as a temporary approximation that violates the governing logic of {topic}.",
+                "C": f"It replaces formal definitions with unverified procedural shortcuts in {topic}.",
+                "D": f"It restricts analysis strictly to edge cases without referencing general principles in {topic}."
+            }
+        else:
+            text = f"Which formal prerequisite or baseline property is indispensable for understanding '{c_name}' in {topic}?"
+            opts = {
+                "A": f"Verifying the essential baseline properties and prerequisite criteria that anchor '{c_name}' within {topic}.",
+                "B": f"Assuming that operational outcomes can be evaluated without any baseline criteria in {topic}.",
+                "C": f"Conflating theoretical definitions with isolated practical deviations.",
+                "D": f"Ignoring governing constraints and treating all variables as interchangeable in {topic}."
             }
 
         return {

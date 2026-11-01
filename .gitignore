@@ -36,3 +36,8 @@ scratch_*.json
 *.db-wal
 *.db-shm
 *backup*.db
+
+# SQLite runtime databases
+*.db
+Website/database/*.db
+
