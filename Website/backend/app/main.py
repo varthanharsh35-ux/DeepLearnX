@@ -1478,6 +1478,19 @@ def serve_index():
         )
     return {"message": "DeepLearnX Backend Running. Frontend is being loaded."}
 
+@app.get("/download/website.zip")
+def download_website_zip():
+    zip_path = CURRENT_DIR.parents[2] / "DeepLearnX_Website.zip"
+    if not zip_path.exists():
+        zip_path = FRONTEND_DIR / "DeepLearnX_Website.zip"
+    if zip_path.exists():
+        return FileResponse(
+            str(zip_path),
+            filename="DeepLearnX_Website.zip",
+            media_type="application/zip"
+        )
+    raise HTTPException(status_code=404, detail="Zip file not found")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8055, reload=True)

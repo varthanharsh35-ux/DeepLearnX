@@ -44,6 +44,9 @@ Website/database/*.db
 # Scratch directory
 scratch/
 
+# Archives
+*.zip
+
 # Environment secrets
 .env
 .env.*
