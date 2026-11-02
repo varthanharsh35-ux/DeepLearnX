@@ -18,7 +18,7 @@ import hashlib
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from fastapi import FastAPI, HTTPException, Depends, Query, status, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, Query, status, UploadFile, File, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -35,6 +35,12 @@ from graph_engine import KnowledgeGraphEngine
 from predictor import DeepLearnXPredictor
 from concept_guide import get_concept_guide, CONCEPT_GUIDE
 from syllabus_generator import syllabus_engine
+from attempt_manager import (
+    create_assessment_attempt,
+    verify_assessment_attempt,
+    mark_attempt_submitted,
+    init_attempt_tables
+)
 
 try:
     from providers.base import LLMQuotaExhaustedError, LLMRateLimitError, LLMAuthenticationError
@@ -98,6 +104,15 @@ class AssessmentSubmission(BaseModel):
     user_id: int
     domain_id: str = "deep_learning"
     answers: List[QuestionAnswer]
+    attempt_id: Optional[str] = None
+    attempt_token: Optional[str] = None
+
+class StartAttemptRequest(BaseModel):
+    user_id: int
+    domain_id: str = "deep_learning"
+    question_ids: List[str]
+    expires_in_seconds: Optional[int] = 7200
+
 
 class RemedialSubmission(BaseModel):
     user_id: int
@@ -470,6 +485,7 @@ def get_student_knowledge_map(user_id: int, domain: str = "deep_learning", sessi
 
 @app.get("/api/assessment/questions")
 def get_assessment_questions(
+    response: Response,
     limit: int = 10,
     domain: str = "deep_learning",
     user_id: Optional[int] = None
@@ -571,7 +587,48 @@ def get_assessment_questions(
             },
             "reasoning_probe": rp_data
         })
+
+    # Phase 1: Server-issued assessment attempt token (non-blocking for legacy anonymous queries)
+    if user_id and questions:
+        try:
+            conn_att = get_db_connection()
+            q_ids = [q["id"] for q in questions]
+            att = create_assessment_attempt(
+                conn=conn_att,
+                user_id=user_id,
+                domain_id=domain,
+                question_ids=q_ids
+            )
+            response.headers["X-Assessment-Attempt-Id"] = att["attempt_id"]
+            response.headers["X-Assessment-Attempt-Token"] = att["attempt_token"]
+            conn_att.close()
+        except Exception as att_err:
+            logger.warning(f"Failed to issue attempt token for user {user_id}: {att_err}")
+
     return questions
+
+@app.post("/api/assessment/start-attempt")
+def start_assessment_attempt_endpoint(req: StartAttemptRequest):
+    """
+    Server-issues a cryptographically signed assessment attempt token
+    with time-bounded expiration and replay protection.
+    """
+    conn = get_db_connection()
+    try:
+        att = create_assessment_attempt(
+            conn=conn,
+            user_id=req.user_id,
+            domain_id=req.domain_id,
+            question_ids=req.question_ids,
+            expires_in_seconds=req.expires_in_seconds or 7200
+        )
+        return {
+            "status": "success",
+            **att
+        }
+    finally:
+        conn.close()
+
 
 @app.get("/api/assessment/provider-status")
 def get_provider_status():
@@ -688,6 +745,23 @@ def custom_generate_assessment(req: CustomGenerateRequest):
             seed_offset=req.seed_offset or 0,
             selected_disambiguation=req.selected_disambiguation
         )
+        
+        # Phase 1: Issue assessment attempt token for the generated custom curriculum
+        if isinstance(result, dict) and result.get("status") == "success" and result.get("domain_id"):
+            uid = req.user_id or 1
+            conn_att = get_db_connection()
+            try:
+                q_rows = conn_att.execute("SELECT id FROM questions WHERE domain_id = ?", (result["domain_id"],)).fetchall()
+                q_ids = [r["id"] for r in q_rows]
+                if q_ids:
+                    att = create_assessment_attempt(conn_att, user_id=uid, domain_id=result["domain_id"], question_ids=q_ids)
+                    result["attempt_id"] = att["attempt_id"]
+                    result["attempt_token"] = att["attempt_token"]
+            except Exception as att_err:
+                logger.warning(f"Failed to issue attempt token for custom domain {result.get('domain_id')}: {att_err}")
+            finally:
+                conn_att.close()
+
         return result
     except LLMQuotaExhaustedError as qe:
         retry_msg = f" Retry available in {qe.retry_after}." if getattr(qe, "retry_after", None) else ""
@@ -813,6 +887,22 @@ def submit_assessment(sub: AssessmentSubmission):
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # Phase 1: Cryptographic Attempt Verification & Replay Protection
+    verified_attempt_id = None
+    if sub.attempt_token:
+        submitted_qids = [a.question_id for a in sub.answers]
+        ok, reason, att_info = verify_assessment_attempt(
+            conn=conn,
+            token=sub.attempt_token,
+            user_id=sub.user_id,
+            domain_id=sub.domain_id,
+            submitted_question_ids=submitted_qids
+        )
+        if not ok:
+            conn.close()
+            raise HTTPException(status_code=400, detail=f"Invalid assessment attempt: {reason}")
+        verified_attempt_id = att_info["attempt_id"]
+
     # Format answers for predictor
     ans_dicts = [a.model_dump() for a in sub.answers]
     
@@ -962,12 +1052,16 @@ def submit_assessment(sub: AssessmentSubmission):
             VALUES (?, ?, ?, ?, ?, ?)
         """, (session_id, a.question_id, a.selected_option, is_corr, a.response_time, a.confidence))
         
+    if verified_attempt_id:
+        mark_attempt_submitted(conn, verified_attempt_id, session_id)
+
     conn.commit()
     conn.close()
     
     return {
         "status": "success",
         "session_id": session_id,
+        "attempt_id": verified_attempt_id,
         "score": score,
         "total_questions": total_q,
         "accuracy": accuracy,

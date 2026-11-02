@@ -189,6 +189,16 @@ def init_db():
     );
     """)
 
+    # 9. Server-Issued Assessment Attempts (Phase 1 Security & Replay Prevention)
+    try:
+        from attempt_manager import init_attempt_tables
+    except ImportError:
+        try:
+            from app.attempt_manager import init_attempt_tables
+        except ImportError:
+            from backend.app.attempt_manager import init_attempt_tables
+    init_attempt_tables(conn)
+
     conn.commit()
     conn.close()
     print("Database tables initialized with multi-domain support.")
