@@ -36,6 +36,14 @@ from predictor import DeepLearnXPredictor
 from concept_guide import get_concept_guide, CONCEPT_GUIDE
 from syllabus_generator import syllabus_engine
 
+try:
+    from providers.base import LLMQuotaExhaustedError, LLMRateLimitError, LLMAuthenticationError
+except ImportError:
+    try:
+        from app.providers.base import LLMQuotaExhaustedError, LLMRateLimitError, LLMAuthenticationError
+    except ImportError:
+        from backend.app.providers.base import LLMQuotaExhaustedError, LLMRateLimitError, LLMAuthenticationError
+
 # Initialize core services
 init_db()
 graph_engine = KnowledgeGraphEngine()
@@ -681,6 +689,39 @@ def custom_generate_assessment(req: CustomGenerateRequest):
             selected_disambiguation=req.selected_disambiguation
         )
         return result
+    except LLMQuotaExhaustedError as qe:
+        retry_msg = f" Retry available in {qe.retry_after}." if getattr(qe, "retry_after", None) else ""
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "quota_exhausted",
+                "detail": f"Gemini Free Tier daily request quota exceeded.{retry_msg} To continue generating assessments, you can configure an OpenAI API key in settings, or use authentic offline knowledge synthesis.",
+                "provider": qe.provider,
+                "retry_after": getattr(qe, "retry_after", None),
+                "retry_after_seconds": getattr(qe, "retry_after_seconds", None),
+                "quota_exhausted": True
+            }
+        )
+    except LLMRateLimitError as rle:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "rate_limited",
+                "detail": f"Provider '{rle.provider}' rate limit exceeded. Please wait a moment and try again.",
+                "provider": rle.provider,
+                "retry_after": getattr(rle, "retry_after", None),
+                "retry_after_seconds": getattr(rle, "retry_after_seconds", None)
+            }
+        )
+    except LLMAuthenticationError as ae:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "authentication_rejected",
+                "detail": f"API key rejected by {ae.provider}: {ae.message}",
+                "provider": ae.provider
+            }
+        )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except RuntimeError as re_err:
@@ -742,6 +783,19 @@ def upload_syllabus_file(
             api_provider=api_provider
         )
         return result
+    except LLMQuotaExhaustedError as qe:
+        retry_msg = f" Retry available in {qe.retry_after}." if getattr(qe, "retry_after", None) else ""
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "quota_exhausted",
+                "detail": f"Gemini Free Tier daily request quota exceeded.{retry_msg} To continue generating assessments, you can configure an OpenAI API key in settings, or use authentic offline knowledge synthesis.",
+                "provider": qe.provider,
+                "retry_after": getattr(qe, "retry_after", None),
+                "retry_after_seconds": getattr(qe, "retry_after_seconds", None),
+                "quota_exhausted": True
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process syllabus file: {str(e)}")
 

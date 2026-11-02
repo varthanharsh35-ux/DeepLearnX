@@ -47,6 +47,67 @@ except ImportError:
     errors = None
 
 
+def parse_duration_to_seconds(text: str) -> Optional[float]:
+    """
+    Parses duration strings like '19h22m24.761096144s', '45s', or '12m30s' into float seconds.
+    """
+    if not text:
+        return None
+    match = re.search(r"(?:retry\s+(?:in|after)\s*)([0-9hms\.\s]+)", text, re.IGNORECASE)
+    duration_str = match.group(1).strip() if match else text.strip()
+
+    h_m = re.search(r"(\d+)\s*h", duration_str, re.IGNORECASE)
+    m_m = re.search(r"(\d+)\s*m(?!s)", duration_str, re.IGNORECASE)
+    s_m = re.search(r"([\d\.]+)\s*s", duration_str, re.IGNORECASE)
+
+    if h_m or m_m or s_m:
+        hours = float(h_m.group(1)) if h_m else 0.0
+        minutes = float(m_m.group(1)) if m_m else 0.0
+        seconds = float(s_m.group(1)) if s_m else 0.0
+        total = hours * 3600.0 + minutes * 60.0 + seconds
+        return total if total > 0 else None
+
+    num_m = re.search(r"^(\d+(?:\.\d+)?)$", duration_str.strip("."))
+    if num_m:
+        return float(num_m.group(1))
+
+    return None
+
+
+def format_retry_window(seconds_or_text: Union[float, str, None]) -> Optional[str]:
+    """
+    Formats retry window into a human-friendly description like '19 hours, 22 minutes' or '45 seconds'.
+    """
+    if not seconds_or_text:
+        return None
+
+    if isinstance(seconds_or_text, str):
+        secs = parse_duration_to_seconds(seconds_or_text)
+        if secs is None:
+            m = re.search(r"retry\s+(?:in|after)\s+([^.\n]+)", seconds_or_text, re.IGNORECASE)
+            return m.group(1).strip() if m else seconds_or_text
+    else:
+        secs = seconds_or_text
+
+    if secs is None or secs <= 0:
+        return None
+
+    hours = int(secs // 3600)
+    rem = secs % 3600
+    minutes = int(rem // 60)
+    seconds = int(rem % 60)
+
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes > 0:
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    if seconds > 0 and hours == 0:
+        parts.append(f"{seconds} second{'s' if seconds != 1 else ''}")
+
+    return ", ".join(parts) if parts else "a few seconds"
+
+
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini provider conforming to BaseLLMProvider."""
 
@@ -88,16 +149,67 @@ class GeminiProvider(BaseLLMProvider):
             if code == 404 or "NOT_FOUND" in msg:
                 return LLMUnsupportedModelError(f"Gemini model '{self.config.model}' not found: {msg}", provider="gemini")
             if code == 429 or "RESOURCE_EXHAUSTED" in msg:
-                if "quota" in msg.lower():
-                    return LLMQuotaExhaustedError(f"Gemini quota exhausted: {msg}", provider="gemini", status_code=429)
-                return LLMRateLimitError(f"Gemini rate limit exceeded: {msg}", provider="gemini", status_code=429)
+                retry_secs = parse_duration_to_seconds(msg)
+                retry_str = format_retry_window(retry_secs if retry_secs is not None else msg)
+                msg_lower = msg.lower()
+                is_daily_quota = (
+                    "quota" in msg_lower or
+                    "per day" in msg_lower or
+                    "free_tier" in msg_lower or
+                    "daily" in msg_lower or
+                    "billing" in msg_lower or
+                    (retry_secs is not None and retry_secs > 120)
+                )
+                if is_daily_quota:
+                    retry_info = f" Retry available in {retry_str}." if retry_str else ""
+                    return LLMQuotaExhaustedError(
+                        f"Gemini Free Tier daily request quota exceeded.{retry_info} Detail: {msg}",
+                        provider="gemini",
+                        status_code=429,
+                        retry_after=retry_str,
+                        retry_after_seconds=retry_secs
+                    )
+                return LLMRateLimitError(
+                    f"Gemini rate limit exceeded: {msg}",
+                    provider="gemini",
+                    status_code=429,
+                    retry_after=retry_str,
+                    retry_after_seconds=retry_secs
+                )
             if code in (500, 502, 503, 504) or "UNAVAILABLE" in msg:
                 return LLMServerError(f"Gemini server error: {msg}", provider="gemini", status_code=code or 503)
             if code == 400 or "INVALID_ARGUMENT" in msg:
                 return LLMInvalidRequestError(f"Invalid Gemini request: {msg}", provider="gemini", status_code=400)
 
-        # Fallback string heuristics for generic network/timeout exceptions
+        # Fallback string heuristics for generic network/timeout/quota exceptions
         low = err_str.lower()
+        if "429" in low or "resource_exhausted" in low or "quota" in low:
+            retry_secs = parse_duration_to_seconds(err_str)
+            retry_str = format_retry_window(retry_secs if retry_secs is not None else err_str)
+            is_daily_quota = (
+                "per day" in low or
+                "free_tier" in low or
+                "quota" in low or
+                "daily" in low or
+                "billing" in low or
+                (retry_secs is not None and retry_secs > 120)
+            )
+            if is_daily_quota:
+                retry_info = f" Retry available in {retry_str}." if retry_str else ""
+                return LLMQuotaExhaustedError(
+                    f"Gemini Free Tier daily request quota exceeded.{retry_info} Detail: {err_str}",
+                    provider="gemini",
+                    status_code=429,
+                    retry_after=retry_str,
+                    retry_after_seconds=retry_secs
+                )
+            return LLMRateLimitError(
+                f"Gemini rate limit exceeded: {err_str}",
+                provider="gemini",
+                status_code=429,
+                retry_after=retry_str,
+                retry_after_seconds=retry_secs
+            )
         if "timed out" in low or "timeout" in low:
             return LLMTimeoutError(f"Gemini request timed out: {err_str}", provider="gemini")
         if "connection" in low or "nodename" in low or "dns" in low or "network" in low:
@@ -190,6 +302,8 @@ class GeminiProvider(BaseLLMProvider):
                     logger.warning(f"[Gemini] Attempt {attempt+1} failed ({mapped.message}). Retrying in {backoff}s...")
                     time.sleep(backoff)
                 else:
+                    if isinstance(mapped, LLMQuotaExhaustedError):
+                        logger.error(f"[Gemini] Quota exhausted (retry available in {getattr(mapped, 'retry_after', 'unknown')}). No retries will be attempted.")
                     raise mapped
 
         raise last_error or LLMServerError("Gemini generation failed after retries", provider="gemini")
@@ -240,6 +354,8 @@ class GeminiProvider(BaseLLMProvider):
                     backoff = min(1.0 * (2 ** attempt), 8.0)
                     time.sleep(backoff)
                 else:
+                    if isinstance(mapped, LLMQuotaExhaustedError):
+                        logger.error(f"[Gemini text] Quota exhausted (retry available in {getattr(mapped, 'retry_after', 'unknown')}). No retries will be attempted.")
                     raise mapped
 
         raise last_error or LLMServerError("Gemini text generation failed", provider="gemini")
@@ -297,21 +413,35 @@ class GeminiProvider(BaseLLMProvider):
         except Exception as e:
             latency = (time.time() - t0) * 1000.0
             mapped = self._map_error(e)
-            category = "authentication_rejected" if isinstance(mapped, LLMAuthenticationError) else (
-                "quota_exhausted" if isinstance(mapped, LLMQuotaExhaustedError) else (
-                    "rate_limited" if isinstance(mapped, LLMRateLimitError) else "connection_error"
-                )
-            )
+            if isinstance(mapped, LLMQuotaExhaustedError):
+                status_name = "quota_exhausted"
+                category = "quota_exhausted"
+                msg = f"Gemini Free Tier daily request quota exceeded.{' Retry in ' + mapped.retry_after if getattr(mapped, 'retry_after', None) else ''}"
+            elif isinstance(mapped, LLMAuthenticationError):
+                status_name = "authentication_rejected"
+                category = "authentication_rejected"
+                msg = f"Gemini API key rejected: {mapped.message}"
+            elif isinstance(mapped, LLMRateLimitError):
+                status_name = "rate_limited"
+                category = "rate_limited"
+                msg = f"Gemini rate limit exceeded: {mapped.message}"
+            else:
+                status_name = "error"
+                category = "connection_error"
+                msg = f"Gemini connectivity verification failed: {mapped.message}"
+
             health = ProviderHealth(
                 provider="gemini",
                 configured=True,
                 reachable=False,
-                last_status="error",
+                last_status=status_name,
                 model=self.config.model,
                 last_checked=now,
                 latency_ms=latency,
                 error_category=category,
-                message=f"Gemini connectivity verification failed: {mapped.message}"
+                retry_after=getattr(mapped, "retry_after", None),
+                retry_after_seconds=getattr(mapped, "retry_after_seconds", None),
+                message=msg
             )
 
         self._cached_health = health

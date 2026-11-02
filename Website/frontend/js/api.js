@@ -123,7 +123,17 @@ const API = {
         selected_disambiguation: selectedDisambiguation
       })
     });
-    if (!res.ok) throw new Error((await res.json()).detail || "Failed to generate custom assessment");
+    if (!res.ok) {
+      let errData;
+      try { errData = await res.json(); } catch (_) { errData = { detail: res.statusText }; }
+      const err = new Error(errData.detail || "Failed to generate custom assessment");
+      err.status = res.status;
+      err.data = errData;
+      err.error = errData.error;
+      err.retry_after = errData.retry_after;
+      err.quota_exhausted = Boolean(errData.quota_exhausted || errData.error === "quota_exhausted");
+      throw err;
+    }
     return await res.json();
   },
 
@@ -133,6 +143,22 @@ const API = {
     let url = `${API_BASE}/api/assessment/upload-syllabus-file?topic_title=${encodeURIComponent(topicTitle)}`;
     if (apiKey) url += `&api_key=${encodeURIComponent(apiKey)}`;
     if (apiProvider) url += `&api_provider=${encodeURIComponent(apiProvider)}`;
+    const res = await fetch(url, {
+      method: "POST",
+      body: formData
+    });
+    if (!res.ok) {
+      let errData;
+      try { errData = await res.json(); } catch (_) { errData = { detail: res.statusText }; }
+      const err = new Error(errData.detail || "Failed to process syllabus file");
+      err.status = res.status;
+      err.data = errData;
+      err.error = errData.error;
+      err.retry_after = errData.retry_after;
+      err.quota_exhausted = Boolean(errData.quota_exhausted || errData.error === "quota_exhausted");
+      throw err;
+    }
+    return await res.json();
     const res = await fetch(url, {
       method: "POST",
       body: formData

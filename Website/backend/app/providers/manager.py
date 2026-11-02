@@ -95,12 +95,14 @@ class LLMProviderManager:
         self.openai_provider = OpenAIProvider(self.openai_config)
         
         # Generation telemetry & runtime status tracking
-        self.last_generation_status: Optional[str] = None  # "live_generation_succeeded", "generation_failed", "provider_unavailable"
+        self.last_generation_status: Optional[str] = None  # "live_generation_succeeded", "generation_failed", "provider_unavailable", "quota_exhausted"
         self.last_generation_error: Optional[str] = None
         self.last_generation_time: Optional[float] = None
         self.total_live_generations: int = 0
         self.last_failover_event: Optional[Dict[str, Any]] = None
         self.failover_history: List[Dict[str, Any]] = []
+        self.quota_exhausted_retry_after: Optional[str] = None
+        self.quota_exhausted_retry_seconds: Optional[float] = None
 
     def reload_config(self) -> None:
         """Reloads configuration from os.environ."""
@@ -222,6 +224,61 @@ class LLMProviderManager:
             self.last_generation_time = time.time()
             self.total_live_generations += 1
             return res
+        except LLMQuotaExhaustedError as qe:
+            logger.warning(f"Primary provider '{primary.provider_name}' daily quota exhausted: {qe}")
+            # Safe provider failover: ONLY failover if an alternative DIFFERENT provider (e.g. OpenAI) is genuinely configured
+            # Do NOT rotate Gemini models to circumvent free-tier quota (free tier is account-level)
+            if self.fallback_enabled and not api_key_override:
+                secondary_name = "openai" if primary.provider_name == "gemini" else "gemini"
+                secondary = self.get_provider_for_request(provider_name=secondary_name)
+                if (
+                    secondary
+                    and secondary.provider_name != primary.provider_name
+                    and secondary.config.api_key
+                    and not secondary.config.api_key.startswith("your_")
+                    and secondary.config.api_key != primary.config.api_key
+                ):
+                    logger.info(f"Failing over from '{primary.provider_name}' to configured secondary provider '{secondary.provider_name}' due to quota exhaustion...")
+                    try:
+                        res = secondary.generate_structured(schema=schema, prompt=prompt, system_instruction=system_instruction)
+                        failover_record = {
+                            "from_provider": primary.provider_name,
+                            "to_provider": secondary.provider_name,
+                            "primary_error": str(qe),
+                            "primary_error_type": "LLMQuotaExhaustedError",
+                            "reason": "quota_exhaustion",
+                            "timestamp": time.time(),
+                            "succeeded": True
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
+                        self.last_generation_status = "live_generation_succeeded"
+                        self.last_generation_error = None
+                        self.last_generation_time = time.time()
+                        self.total_live_generations += 1
+                        return res
+                    except Exception as sec_e:
+                        failover_record = {
+                            "from_provider": primary.provider_name,
+                            "to_provider": secondary.provider_name,
+                            "primary_error": str(qe),
+                            "secondary_error": str(sec_e),
+                            "primary_error_type": "LLMQuotaExhaustedError",
+                            "reason": "quota_exhaustion",
+                            "timestamp": time.time(),
+                            "succeeded": False
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
+                        logger.error(f"Secondary fallback provider '{secondary.provider_name}' also failed: {sec_e}")
+
+            # No alternative configured or failover failed: preserve quota state and re-raise without retrying
+            self.last_generation_status = "quota_exhausted"
+            self.last_generation_error = str(qe)
+            self.quota_exhausted_retry_after = getattr(qe, "retry_after", None)
+            self.quota_exhausted_retry_seconds = getattr(qe, "retry_after_seconds", None)
+            logger.error(f"Provider '{primary.provider_name}' daily quota exhausted. No alternative provider configured. Preserving quota limitation without retries.")
+            raise qe
         except (LLMNetworkError, LLMTimeoutError, LLMServerError) as e:
             logger.warning(f"Primary provider '{primary.provider_name}' transient error: {e}")
             if self.fallback_enabled and not api_key_override:
@@ -294,6 +351,56 @@ class LLMProviderManager:
             self.last_generation_time = time.time()
             self.total_live_generations += 1
             return res
+        except LLMQuotaExhaustedError as qe:
+            logger.warning(f"Primary provider '{primary.provider_name}' text daily quota exhausted: {qe}")
+            if self.fallback_enabled and not api_key_override:
+                secondary_name = "openai" if primary.provider_name == "gemini" else "gemini"
+                secondary = self.get_provider_for_request(provider_name=secondary_name)
+                if (
+                    secondary
+                    and secondary.provider_name != primary.provider_name
+                    and secondary.config.api_key
+                    and not secondary.config.api_key.startswith("your_")
+                    and secondary.config.api_key != primary.config.api_key
+                ):
+                    try:
+                        res = secondary.generate_text(prompt=prompt, system_instruction=system_instruction)
+                        failover_record = {
+                            "from_provider": primary.provider_name,
+                            "to_provider": secondary.provider_name,
+                            "primary_error": str(qe),
+                            "primary_error_type": "LLMQuotaExhaustedError",
+                            "reason": "quota_exhaustion",
+                            "timestamp": time.time(),
+                            "succeeded": True
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
+                        self.last_generation_status = "live_generation_succeeded"
+                        self.last_generation_error = None
+                        self.last_generation_time = time.time()
+                        self.total_live_generations += 1
+                        return res
+                    except Exception as sec_e:
+                        failover_record = {
+                            "from_provider": primary.provider_name,
+                            "to_provider": secondary.provider_name,
+                            "primary_error": str(qe),
+                            "secondary_error": str(sec_e),
+                            "primary_error_type": "LLMQuotaExhaustedError",
+                            "reason": "quota_exhaustion",
+                            "timestamp": time.time(),
+                            "succeeded": False
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
+                        logger.error(f"Secondary text provider '{secondary.provider_name}' failed: {sec_e}")
+            self.last_generation_status = "quota_exhausted"
+            self.last_generation_error = str(qe)
+            self.quota_exhausted_retry_after = getattr(qe, "retry_after", None)
+            self.quota_exhausted_retry_seconds = getattr(qe, "retry_after_seconds", None)
+            logger.error(f"Provider '{primary.provider_name}' text daily quota exhausted. Preserving quota limitation without retries.")
+            raise qe
         except (LLMNetworkError, LLMTimeoutError, LLMServerError) as e:
             logger.warning(f"Primary provider '{primary.provider_name}' text transient error: {e}")
             if self.fallback_enabled and not api_key_override:
@@ -408,6 +515,7 @@ class LLMProviderManager:
         live_ready = False
         active_provider_name = None
         active_model = None
+        active_health = None
 
         if active:
             active_provider_name = active.provider_name
@@ -415,9 +523,11 @@ class LLMProviderManager:
             active_health = gemini_health if active_provider_name == "gemini" else openai_health
             live_ready = active_health.reachable
 
-        # Compute 7-state taxonomy
+        # Compute 8-state taxonomy
         if not has_any_configured:
             provider_state = "not_configured"
+        elif self.last_generation_status == "quota_exhausted" or (active_health and (active_health.last_status == "quota_exhausted" or active_health.error_category == "quota_exhausted")):
+            provider_state = "quota_exhausted"
         elif self.last_generation_status == "live_generation_succeeded":
             provider_state = "live_generation_succeeded"
         elif self.last_generation_status == "provider_unavailable":
@@ -435,7 +545,13 @@ class LLMProviderManager:
         else:
             active_mode = "offline_knowledge_synthesis"
 
-        if provider_state == "live_generation_succeeded":
+        if provider_state == "quota_exhausted":
+            retry_str = self.quota_exhausted_retry_after or (active_health.retry_after if active_health else None)
+            if retry_str:
+                msg = f"Live cloud LLM provider '{active_provider_name}' Free Tier daily quota is exhausted. Retry available in {retry_str}. You can configure an alternate provider (OpenAI) or use offline knowledge synthesis."
+            else:
+                msg = f"Live cloud LLM provider '{active_provider_name}' daily request quota is exhausted. You can configure an alternate provider (OpenAI) or use offline knowledge synthesis."
+        elif provider_state == "live_generation_succeeded":
             msg = f"Live cloud LLM provider '{active_provider_name}' ({active_model}) is active, verified, and generation succeeded."
         elif provider_state == "reachable":
             msg = f"Live cloud LLM provider '{active_provider_name}' ({active_model}) is active and verified reachable."
@@ -457,6 +573,9 @@ class LLMProviderManager:
             "offline_ready": True,
             "fallback_enabled": self.fallback_enabled,
             "message": msg,
+            "quota_exhausted": (provider_state == "quota_exhausted"),
+            "retry_after": self.quota_exhausted_retry_after or (active_health.retry_after if active_health else None),
+            "retry_after_seconds": self.quota_exhausted_retry_seconds or (active_health.retry_after_seconds if active_health else None),
             "last_generation_status": self.last_generation_status,
             "last_generation_error": self.last_generation_error,
             "last_failover_event": self.last_failover_event,

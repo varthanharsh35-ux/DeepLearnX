@@ -969,12 +969,7 @@ async function selectAmbiguityOption(candId) {
       domainSelect.value = result.domain_id;
     }
   } catch (err) {
-    if (statusBanner) {
-      statusBanner.style.background = "rgba(239, 68, 68, 0.15)";
-      statusBanner.style.border = "1px solid #ef4444";
-      statusBanner.style.color = "#fca5a5";
-      statusBanner.innerHTML = `<strong>Error generating assessment:</strong> ${err.message}`;
-    }
+    renderGenerationErrorBanner(statusBanner, err);
   } finally {
     if (btn) btn.disabled = false;
     if (btnText) btnText.textContent = "Generate Custom Question Bank & DAG";
@@ -1419,12 +1414,7 @@ async function handleCustomSyllabusSubmit(event) {
 
   } catch (err) {
     if (stageTimer) clearInterval(stageTimer);
-    if (statusBanner) {
-      statusBanner.style.background = "rgba(239, 68, 68, 0.15)";
-      statusBanner.style.border = "1px solid #ef4444";
-      statusBanner.style.color = "#fca5a5";
-      statusBanner.innerHTML = `<strong>Error generating assessment:</strong> ${err.message}`;
-    }
+    renderGenerationErrorBanner(statusBanner, err);
   } finally {
     if (stageTimer) clearInterval(stageTimer);
     if (btn) btn.disabled = false;
@@ -1508,6 +1498,111 @@ function handleAiProviderChange() {
   }
 }
 
+function renderGenerationErrorBanner(statusBanner, err) {
+  if (!statusBanner) return;
+  const isQuota = err.quota_exhausted || (err.data && err.data.quota_exhausted) || (err.message && err.message.toLowerCase().includes("quota"));
+  if (isQuota) {
+    const retryWindow = err.retry_after || (err.data && err.data.retry_after) || "approx. 19 hours";
+    statusBanner.style.background = "rgba(245, 158, 11, 0.15)";
+    statusBanner.style.border = "1px solid #f59e0b";
+    statusBanner.style.color = "#fef3c7";
+    statusBanner.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 0.5rem; text-align: left;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 1.25rem;">⏳</span>
+          <strong style="color: #fbbf24; font-size: 0.95rem;">Gemini Free Tier Daily Request Quota Exhausted</strong>
+        </div>
+        <p style="margin: 0; font-size: 0.85rem; color: #cbd5e1; line-height: 1.45;">
+          Google's Free Tier daily limit has been reached. Quota resets in <strong style="color: #67e8f9;">${retryWindow}</strong>.
+        </p>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.35rem; flex-wrap: wrap;">
+          <button class="btn btn-sm" onclick="generateWithOfflineFallback()" style="font-size: 0.8rem; background: rgba(99, 102, 241, 0.25); border: 1px solid #6366f1; color: #c7d2fe; cursor: pointer; border-radius: 6px; padding: 0.3rem 0.65rem;">
+            ⚡ Generate with Offline Knowledge Synthesis
+          </button>
+          <button class="btn btn-sm" onclick="document.getElementById('aiApiKeyInput')?.focus()" style="font-size: 0.8rem; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); color: #f1f5f9; cursor: pointer; border-radius: 6px; padding: 0.3rem 0.65rem;">
+            🔑 Configure OpenAI Key
+          </button>
+        </div>
+      </div>
+    `;
+  } else if (err.status === 401 || (err.data && err.data.error === "authentication_rejected")) {
+    statusBanner.style.background = "rgba(239, 68, 68, 0.15)";
+    statusBanner.style.border = "1px solid #ef4444";
+    statusBanner.style.color = "#fca5a5";
+    statusBanner.innerHTML = `<strong>API Key Rejected:</strong> ${err.message}. Please check your credentials in the AI Configuration drawer.`;
+  } else {
+    statusBanner.style.background = "rgba(239, 68, 68, 0.15)";
+    statusBanner.style.border = "1px solid #ef4444";
+    statusBanner.style.color = "#fca5a5";
+    statusBanner.innerHTML = `<strong>Error generating assessment:</strong> ${err.message}`;
+  }
+}
+
+window.generateWithOfflineFallback = async function() {
+  const topicInput = document.getElementById("customTopicInput");
+  const syllabusInput = document.getElementById("customSyllabusInput");
+  const topicTitle = topicInput ? topicInput.value.trim() : "";
+  const syllabusText = syllabusInput ? syllabusInput.value.trim() : "";
+  if (!topicTitle) {
+    alert("Please enter a topic title first.");
+    return;
+  }
+  const statusBanner = document.getElementById("generationStatusBanner");
+  const btn = document.getElementById("generateCustomBtn");
+  const btnText = document.getElementById("generateCustomBtnText");
+  if (statusBanner) {
+    statusBanner.style.display = "block";
+    statusBanner.style.background = "rgba(99, 102, 241, 0.15)";
+    statusBanner.style.border = "1px solid #6366f1";
+    statusBanner.style.color = "#c7d2fe";
+    statusBanner.innerHTML = `<span>⚡ Generating assessment via Authentic Offline Knowledge Synthesis for <strong>${topicTitle}</strong>...</span>`;
+  }
+  if (btn) btn.disabled = true;
+  try {
+    const userId = window.currentUser ? window.currentUser.id : null;
+    const result = await API.customGenerateAssessment(topicTitle, syllabusText, userId, 12, null, "offline");
+    if (statusBanner) {
+      statusBanner.style.background = "rgba(16, 185, 129, 0.15)";
+      statusBanner.style.border = "1px solid #10b981";
+      statusBanner.style.color = "#6ee7b7";
+      statusBanner.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+          <div>
+            <strong>✨ Successfully Generated via Offline Synthesis!</strong>
+            <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: #cbd5e1;">
+              Created <strong>${result.concepts_count} concepts</strong>, <strong>${result.questions_count} diagnostic questions</strong>, and registered prerequisite DAG for <strong>${result.name}</strong>.
+            </p>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="startAssessmentFlow('${result.domain_id}')" style="background: #10b981; border-color: #10b981;">
+            Launch Assessment Now &rarr;
+          </button>
+        </div>
+      `;
+    }
+    window.customDomains[result.domain_id] = result;
+    const domainSelect = document.getElementById("domainSelect");
+    if (domainSelect) {
+      const optExists = Array.from(domainSelect.options).some(o => o.value === result.domain_id);
+      if (!optExists) {
+        const newOpt = document.createElement("option");
+        newOpt.value = result.domain_id;
+        newOpt.textContent = `${result.icon || '✨'} ${result.name}`;
+        domainSelect.appendChild(newOpt);
+      }
+      domainSelect.value = result.domain_id;
+    }
+  } catch (offlineErr) {
+    if (statusBanner) {
+      statusBanner.style.background = "rgba(239, 68, 68, 0.15)";
+      statusBanner.style.border = "1px solid #ef4444";
+      statusBanner.style.color = "#fca5a5";
+      statusBanner.innerHTML = `<strong>Offline generation failed:</strong> ${offlineErr.message}`;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+};
+
 async function loadSavedApiKey() {
   const savedKey = localStorage.getItem("deeplearnx_ai_api_key");
   const savedProv = localStorage.getItem("deeplearnx_ai_provider") || "gemini";
@@ -1535,7 +1630,13 @@ async function loadSavedApiKey() {
       const state = status.provider_state || (status.live_llm_ready ? "reachable" : "offline_knowledge_synthesis");
       const providerName = status.selected_provider && status.selected_provider !== "offline_synthesizer" ? ` (${status.selected_provider})` : "";
 
-      if (status.live_llm_ready || state === "live_generation_succeeded" || state === "reachable") {
+      if (state === "quota_exhausted" || status.quota_exhausted) {
+        const retryWindow = status.retry_after ? ` (Resets in ${status.retry_after})` : "";
+        pill.textContent = `⏳ Gemini Quota Exhausted${retryWindow}`;
+        pill.style.background = "rgba(245, 158, 11, 0.22)";
+        pill.style.borderColor = "#f59e0b";
+        pill.style.color = "#fbbf24";
+      } else if (status.live_llm_ready || state === "live_generation_succeeded" || state === "reachable") {
         pill.textContent = `🟢 Live LLM Active${providerName}`;
         pill.style.background = "rgba(16, 185, 129, 0.2)";
         pill.style.borderColor = "#10b981";

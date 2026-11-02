@@ -1617,7 +1617,7 @@ class SyllabusGeneratorEngine:
                 provider_error = str(e)
                 print(f"[AI Generator Failure via LLMProviderManager] {provider_error}")
                 if require_live_llm or explicit_key_provided:
-                    raise RuntimeError(f"Live LLM generation failed ({provider}): {provider_error}")
+                    raise
 
         # 2. Check curated domain taxonomy if LLM not used or failed
         if not parsed_llm_data:

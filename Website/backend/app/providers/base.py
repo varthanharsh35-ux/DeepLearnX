@@ -44,15 +44,32 @@ class LLMAuthenticationError(LLMError):
 
 class LLMQuotaExhaustedError(LLMError):
     """Raised when provider account quota has been completely exhausted (non-transient)."""
-    def __init__(self, message: str, provider: str = "unknown", status_code: int = 429):
+    def __init__(
+        self,
+        message: str,
+        provider: str = "unknown",
+        status_code: int = 429,
+        retry_after: Optional[str] = None,
+        retry_after_seconds: Optional[float] = None
+    ):
         super().__init__(message, provider=provider, status_code=status_code, retryable=False)
+        self.retry_after = retry_after
+        self.retry_after_seconds = retry_after_seconds
 
 
 class LLMRateLimitError(LLMError):
     """Raised when rate limit is temporarily exceeded (transient, retryable with backoff)."""
-    def __init__(self, message: str, provider: str = "unknown", status_code: int = 429, retry_after: Optional[float] = None):
+    def __init__(
+        self,
+        message: str,
+        provider: str = "unknown",
+        status_code: int = 429,
+        retry_after: Optional[str] = None,
+        retry_after_seconds: Optional[float] = None
+    ):
         super().__init__(message, provider=provider, status_code=status_code, retryable=True)
         self.retry_after = retry_after
+        self.retry_after_seconds = retry_after_seconds
 
 
 class LLMNetworkError(LLMError):
@@ -180,6 +197,8 @@ class ProviderHealth:
     latency_ms: Optional[float] = None
     message: str = ""
     error_category: Optional[str] = None
+    retry_after: Optional[str] = None
+    retry_after_seconds: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -191,7 +210,9 @@ class ProviderHealth:
             "last_checked": self.last_checked,
             "latency_ms": round(self.latency_ms, 2) if self.latency_ms is not None else None,
             "message": self.message,
-            "error_category": self.error_category
+            "error_category": self.error_category,
+            "retry_after": self.retry_after,
+            "retry_after_seconds": self.retry_after_seconds
         }
 
 
