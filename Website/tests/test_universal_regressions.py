@@ -348,8 +348,14 @@ def test_regression_q_provider_readiness_and_no_silent_fallback():
     assert "active_mode" in status, "Provider status missing 'active_mode' key!"
     
     # Verify that requesting live LLM with no key configured raises ValueError without silent fallback
+    from backend.app.providers.manager import get_provider_manager
+    mgr = get_provider_manager()
+    old_gem = mgr.gemini_config.api_key
+    old_oai = mgr.openai_config.api_key
     raised_value_error = False
     try:
+        mgr.gemini_config.api_key = None
+        mgr.openai_config.api_key = None
         engine.generate_custom_domain(
             topic_title="Quantum Cryptography",
             api_key=None,
@@ -358,6 +364,9 @@ def test_regression_q_provider_readiness_and_no_silent_fallback():
     except ValueError as ve:
         raised_value_error = True
         assert "no valid API key" in str(ve) or "Live LLM generation was requested" in str(ve)
+    finally:
+        mgr.gemini_config.api_key = old_gem
+        mgr.openai_config.api_key = old_oai
     assert raised_value_error, "Failed to raise ValueError when live LLM requested without API key!"
     
     print("✓ Regression Q Passed: Provider readiness explicitly reported; no silent fallback on missing credentials.")

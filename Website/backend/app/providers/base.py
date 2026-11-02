@@ -264,3 +264,12 @@ class BaseLLMProvider(ABC):
         Distinguishes missing credentials from invalid credentials from reachable service.
         """
         pass
+
+
+# Register canonical module aliases across all import paths in sys.modules
+import sys as _sys
+_current_mod = _sys.modules.get(__name__)
+if _current_mod:
+    for _alias in ("backend.app.providers.base", "app.providers.base", "providers.base", "Website.backend.app.providers.base"):
+        _sys.modules[_alias] = _current_mod
+
