@@ -199,6 +199,16 @@ def init_db():
             from backend.app.attempt_manager import init_attempt_tables
     init_attempt_tables(conn)
 
+    # 10. Versioned Educational Data Model (Phase 2)
+    try:
+        from educational_data_model import migrate_educational_data_model
+    except ImportError:
+        try:
+            from app.educational_data_model import migrate_educational_data_model
+        except ImportError:
+            from backend.app.educational_data_model import migrate_educational_data_model
+    migrate_educational_data_model(conn)
+
     conn.commit()
     conn.close()
     print("Database tables initialized with multi-domain support.")
