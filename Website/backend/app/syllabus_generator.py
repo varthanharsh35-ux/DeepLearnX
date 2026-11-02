@@ -381,8 +381,8 @@ def check_provider_status() -> Dict[str, Any]:
                 "configured": gemini_info.get("configured", bool(gemini_key)),
                 "key_masked": mask_key(gemini_key),
                 "network_reachable": gemini_info.get("reachable", False),
-                "default_model": gemini_info.get("model", os.environ.get("GEMINI_DEFAULT_MODEL", "gemini-1.5-flash")),
-                "supported_models": ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"],
+                "default_model": gemini_info.get("model", os.environ.get("GEMINI_MODEL") or os.environ.get("GEMINI_DEFAULT_MODEL") or "gemini-3.5-flash"),
+                "supported_models": ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"],
                 "last_status": gemini_info.get("last_status", "unconfigured"),
                 "message": gemini_info.get("message", "")
             },
@@ -1562,6 +1562,10 @@ class SyllabusGeneratorEngine:
         topic_title = normalize_topic_title(topic_title)
         if not topic_title:
             raise ValueError("Topic title cannot be empty.")
+
+        # Reject meaningless or purely numeric/symbolic input
+        if not re.search(r'[a-zA-Z]{2,}', topic_title):
+            raise ValueError(f"Invalid or meaningless topic '{topic_title}': Academic topic must contain recognizable subject terminology rather than purely numeric or symbolic input.")
 
         clean_slug = slugify(topic_title)
         random_suffix = uuid.uuid4().hex[:6]

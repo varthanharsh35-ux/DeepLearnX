@@ -44,3 +44,8 @@ Website/database/*.db
 # Scratch directory
 scratch/
 
+# Environment secrets
+.env
+.env.*
+!.env.example
+

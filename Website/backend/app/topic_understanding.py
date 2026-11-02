@@ -581,6 +581,22 @@ class TopicUnderstandingEngine:
         if not clean_topic:
             clean_topic = "General Academic Studies"
 
+        # Check for invalid or meaningless input (e.g. "5 5 5", purely numeric/symbolic)
+        has_alpha_words = bool(re.search(r'[a-zA-Z]{2,}', clean_topic))
+        if not has_alpha_words:
+            return TopicInterpretation(
+                original_query=topic,
+                canonical_title=clean_topic,
+                discipline="Invalid Academic Topic",
+                subdiscipline="Clarification Required",
+                scope=f"'{clean_topic}' does not contain recognizable academic subject terminology. Please enter a valid academic topic.",
+                is_ambiguous=True,
+                ambiguities=[
+                    {"id": "clarify_academic_topic", "title": "Please provide a descriptive academic topic (e.g., Mathematics, Photosynthesis, Computer Science)", "discipline": "Clarification Required", "subdiscipline": "Input Validation", "scope": "Valid academic curriculum requires recognizable disciplinary keywords."}
+                ],
+                confidence=0.0
+            )
+
         # 1. Check for polysemous ambiguity unless already resolved by selected_disambiguation
         ambig_candidates, resolved_cand = check_topic_ambiguity(clean_topic, syllabus_text, academic_level)
         if ambig_candidates and not selected_disambiguation and not resolved_cand:
@@ -596,8 +612,10 @@ class TopicUnderstandingEngine:
             )
 
         # 1b. Dynamic LLM Polysemy check for unknown terms when live provider is active
+        # Only evaluate bare, unqualified terms (e.g. "Bank", "Terminal", "Pitch", <= 2 words without prepositional phrases)
+        is_bare_query = len(clean_topic.split()) <= 2 and not any(kw in clean_topic.lower() for kw in [" in ", " of ", " for ", " and ", ":", "-", "/"])
         active_provider = self.provider_manager.get_active_provider()
-        if not ambig_candidates and not selected_disambiguation and not (syllabus_text and len(syllabus_text) > 30) and active_provider and not force_offline:
+        if is_bare_query and not ambig_candidates and not selected_disambiguation and not (syllabus_text and len(syllabus_text) > 20) and active_provider and not force_offline:
             try:
                 polysemy_sys = (
                     "You are a linguistic polysemy and academic curriculum analyzer. "
@@ -665,11 +683,13 @@ class TopicUnderstandingEngine:
                 res = active_provider.generate_structured(schema={}, prompt=prompt, system_instruction=system_instruction)
                 data = res.content
                 if isinstance(data, dict) and "discipline" in data:
+                    chosen_disc = selected_cand["discipline"] if selected_cand else data.get("discipline", category)
+                    chosen_subdisc = selected_cand["subdiscipline"] if selected_cand else data.get("subdiscipline", category)
                     return TopicInterpretation(
                         original_query=topic,
                         canonical_title=data.get("canonical_title", clean_topic.title()),
-                        discipline=data.get("discipline", category),
-                        subdiscipline=data.get("subdiscipline", category),
+                        discipline=chosen_disc,
+                        subdiscipline=chosen_subdisc,
                         scope=data.get("scope", f"Introductory academic study of {clean_topic}."),
                         academic_level=data.get("academic_level", "Introductory"),
                         learning_objectives=data.get("learning_objectives", [

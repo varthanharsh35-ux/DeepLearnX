@@ -66,7 +66,9 @@ class LLMProviderManager:
         
         # Discover Gemini config
         gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        gemini_model = os.environ.get("GEMINI_MODEL") or os.environ.get("GEMINI_DEFAULT_MODEL") or "gemini-1.5-flash"
+        gemini_model = os.environ.get("GEMINI_MODEL") or os.environ.get("GEMINI_DEFAULT_MODEL") or "gemini-3.5-flash"
+        if gemini_model in ("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"):
+            gemini_model = "gemini-3.5-flash"
         self.gemini_config = LLMConfig(
             provider="gemini",
             api_key=gemini_key if gemini_key else None,

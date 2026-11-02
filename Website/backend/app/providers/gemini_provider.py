@@ -5,6 +5,8 @@ Uses the official modern `google-genai` SDK (`from google import genai`) with
 structured output enforcement, bounded backoff retries, and comprehensive error mapping.
 """
 
+import os
+import re
 import json
 import time
 import logging
@@ -48,15 +50,16 @@ except ImportError:
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini provider conforming to BaseLLMProvider."""
 
-    DEFAULT_MODEL = "gemini-1.5-flash"
+    DEFAULT_MODEL = "gemini-3.5-flash"
 
     def __init__(self, config: Optional[LLMConfig] = None):
+        env_model = os.environ.get("GEMINI_MODEL") or os.environ.get("GEMINI_DEFAULT_MODEL") or self.DEFAULT_MODEL
         cfg = config or LLMConfig(
             provider="gemini",
-            model=GeminiProvider.DEFAULT_MODEL
+            model=env_model
         )
-        if not cfg.model:
-            cfg.model = self.DEFAULT_MODEL
+        if not cfg.model or cfg.model in ("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"):
+            cfg.model = env_model
         super().__init__(cfg)
         self._client: Optional[Any] = None
 
@@ -150,8 +153,13 @@ class GeminiProvider(BaseLLMProvider):
                             raise LLMTruncationError("Gemini response was truncated by max_output_tokens", provider="gemini")
 
                 # Parse JSON
+                raw_clean = raw_text.strip()
+                if raw_clean.startswith("```"):
+                    raw_clean = re.sub(r"^```[a-zA-Z0-9_-]*\n?", "", raw_clean)
+                    raw_clean = re.sub(r"\n?```$", "", raw_clean).strip()
+
                 try:
-                    parsed_content = json.loads(raw_text)
+                    parsed_content = json.loads(raw_clean)
                 except Exception as json_err:
                     raise LLMFormatError(f"Gemini returned invalid JSON: {json_err}", provider="gemini", raw_output=raw_text)
 
