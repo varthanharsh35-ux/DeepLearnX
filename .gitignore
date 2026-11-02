@@ -40,6 +40,8 @@ scratch_*.json
 # SQLite runtime databases
 *.db
 Website/database/*.db
+Website/database/*.backup*
+*.backup*
 
 # Scratch directory
 scratch/
