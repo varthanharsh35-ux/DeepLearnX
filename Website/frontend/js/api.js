@@ -159,12 +159,6 @@ const API = {
       throw err;
     }
     return await res.json();
-    const res = await fetch(url, {
-      method: "POST",
-      body: formData
-    });
-    if (!res.ok) throw new Error((await res.json()).detail || "Failed to upload syllabus file");
-    return await res.json();
   },
 
   getProviderStatus: async () => {
@@ -222,3 +216,7 @@ const API = {
     return await res.json();
   }
 };
+
+if (typeof window !== "undefined") {
+  window.API = API;
+}
