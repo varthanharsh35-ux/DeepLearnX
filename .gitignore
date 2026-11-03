@@ -40,7 +40,10 @@ scratch_*.json
 # SQLite runtime databases
 *.db
 Website/database/*.db
+*quota_state.json
+Website/backend/app/providers/quota_state.json
 Website/database/*.backup*
+Website/database/.*
 *.backup*
 
 # Scratch directory

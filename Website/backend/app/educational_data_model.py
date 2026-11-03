@@ -180,6 +180,12 @@ def migrate_educational_data_model(conn: sqlite3.Connection) -> None:
                 ) VALUES (?, ?, ?, ?, ?, 'Explain', 'understand', 1, ?)
             """, (lo_id, did, cid, node_id, obj_statement, now))
 
+    # 8. Clean up orphaned foreign key records left from interrupted test runs
+    cursor.execute("DELETE FROM question_validations WHERE question_id NOT IN (SELECT id FROM questions)")
+    cursor.execute("DELETE FROM learning_objectives WHERE domain_id NOT IN (SELECT id FROM domains)")
+    cursor.execute("DELETE FROM curriculum_nodes WHERE domain_id NOT IN (SELECT id FROM domains)")
+    cursor.execute("DELETE FROM assessment_attempts WHERE user_id NOT IN (SELECT id FROM users)")
+
     conn.commit()
 
 

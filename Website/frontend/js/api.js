@@ -6,7 +6,7 @@
 
 const API_BASE = ""; // Relative paths match same-origin backend
 
-const API = {
+var API = {
   // Authentication
   login: async (username, password) => {
     const res = await fetch(`${API_BASE}/api/auth/login`, {
@@ -18,7 +18,7 @@ const API = {
     return await res.json();
   },
 
-  oauthLogin: async (provider, email, fullName, avatarUrl = null) => {
+  oauthLogin: async (provider, email, fullName, avatarUrl = null, credential = null, isDevMock = false) => {
     const res = await fetch(`${API_BASE}/api/auth/oauth-login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -26,10 +26,36 @@ const API = {
         provider: provider,
         email: email,
         full_name: fullName,
-        avatar_url: avatarUrl
+        avatar_url: avatarUrl,
+        credential: credential,
+        is_dev_mock: isDevMock
       })
     });
-    if (!res.ok) throw new Error((await res.json()).detail || "Social authentication failed");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Social authentication failed");
+    }
+    return await res.json();
+  },
+
+  logout: async (token = null) => {
+    const res = await fetch(`${API_BASE}/api/auth/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token })
+    });
+    return await res.json().catch(() => ({ status: "success" }));
+  },
+
+  verifySession: async (token) => {
+    const res = await fetch(`${API_BASE}/api/auth/session?token=${encodeURIComponent(token)}`);
+    if (!res.ok) throw new Error("Session invalid or expired");
+    return await res.json();
+  },
+
+  getOAuthConfig: async () => {
+    const res = await fetch(`${API_BASE}/api/auth/oauth-config`);
+    if (!res.ok) return { google_enabled: false, mock_oauth_allowed: true };
     return await res.json();
   },
 
@@ -88,11 +114,43 @@ const API = {
   },
 
   // Assessment & Deep Learning
+  resolveTopic: async (topic) => {
+    const res = await fetch(`${API_BASE}/api/assessment/resolve-topic?topic=${encodeURIComponent(topic)}`);
+    if (!res.ok) throw new Error("Failed to resolve topic");
+    return await res.json();
+  },
+
   getAssessmentQuestions: async (limit = 10, domain = "pokemon", userId = null) => {
     let url = `${API_BASE}/api/assessment/questions?limit=${limit}&domain=${encodeURIComponent(domain)}`;
     if (userId) url += `&user_id=${encodeURIComponent(userId)}`;
     const res = await fetch(url);
-    return await res.json();
+    const questions = await res.json();
+    const attemptId = res.headers.get("X-Assessment-Attempt-Id");
+    const attemptToken = res.headers.get("X-Assessment-Attempt-Token");
+    if (typeof window !== "undefined" && attemptToken) {
+      window.currentAttemptId = attemptId;
+      window.currentAttemptToken = attemptToken;
+    }
+    return questions;
+  },
+
+  startAssessmentAttempt: async (userId, domainId, questionIds) => {
+    const res = await fetch(`${API_BASE}/api/assessment/start-attempt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId,
+        domain_id: domainId,
+        question_ids: questionIds
+      })
+    });
+    if (!res.ok) throw new Error((await res.json()).detail || "Failed to start assessment attempt");
+    const data = await res.json();
+    if (typeof window !== "undefined" && data.attempt_token) {
+      window.currentAttemptId = data.attempt_id;
+      window.currentAttemptToken = data.attempt_token;
+    }
+    return data;
   },
 
   topicInterpret: async (topicTitle, syllabusText = "") => {
@@ -134,7 +192,12 @@ const API = {
       err.quota_exhausted = Boolean(errData.quota_exhausted || errData.error === "quota_exhausted");
       throw err;
     }
-    return await res.json();
+    const result = await res.json();
+    if (typeof window !== "undefined" && result.attempt_token) {
+      window.currentAttemptId = result.attempt_id;
+      window.currentAttemptToken = result.attempt_token;
+    }
+    return result;
   },
 
   uploadSyllabusFile: async (topicTitle, file, apiKey = null, apiProvider = "gemini") => {

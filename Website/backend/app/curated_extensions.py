@@ -8,32 +8,28 @@ import re
 from typing import List, Tuple, Dict, Any
 
 def normalize_topic_title(raw_title: str) -> str:
-    """Cleans up typos, mixed casing, extra trailing punctuation, and file suffixes."""
-    if not raw_title:
+    """Cleans up formatting, extra whitespace, file extensions, and metadata suffixes
+    while strictly preserving the student's exact academic topic, scope, and subfield intent."""
+    if not raw_title or not raw_title.strip():
         return "Custom Syllabus"
     t = raw_title.strip()
-    t = re.sub(r'[\._\-\s]+syllabus\s*$', '', t, flags=re.IGNORECASE)
-    t = re.sub(r'[\._\-\s]+notes\s*$', '', t, flags=re.IGNORECASE)
-    t = re.sub(r'[\._\-\s]+curriculum\s*$', '', t, flags=re.IGNORECASE)
+    # Strip file extensions
+    t = re.sub(r'\.(pdf|docx?|txt|pptx?)$', '', t, flags=re.IGNORECASE)
+    # Strip administrative suffixes
+    t = re.sub(r'[\._\-\s]+(syllabus|notes|curriculum|handout|courseware|assignment)\s*$', '', t, flags=re.IGNORECASE)
+    # Normalize punctuation and underscores to clean spaces
     t = re.sub(r'[_\.]+', ' ', t)
     
-    # Specific common spelling corrections
-    if re.search(r'horticult', t, re.IGNORECASE):
-        t = "Horticulture Science"
-    elif re.search(r'24csi013|full\s*stack|fsd\b', t, re.IGNORECASE):
-        t = "Full Stack Web Development (FSD)"
-    elif re.search(r'quantum\s*comput', t, re.IGNORECASE):
-        t = "Quantum Computing"
-    elif re.search(r'operating\s*sys', t, re.IGNORECASE):
+    # Expand standalone bare abbreviations only if the input is exclusively that acronym
+    bare = t.strip().lower()
+    if bare == "fsd":
+        t = "Full Stack Web Development"
+    elif bare == "dbms":
+        t = "Database Management Systems"
+    elif bare == "os":
         t = "Operating Systems"
-    elif re.search(r'database|dbms', t, re.IGNORECASE):
-        t = "Database Management Systems (DBMS)"
-    elif re.search(r'fluid\s*(mechanic|dynamic)|hydraulics', t, re.IGNORECASE):
-        t = "Fluid Mechanics"
-    elif re.search(r'engineering\s*(graphics|drawing)|technical\s*drawing|autocad\b|drafting', t, re.IGNORECASE):
-        t = "Engineering Graphics"
 
-    # Clean multiple spaces and strip trailing punctuation
+    # Clean multiple spaces and strip extraneous boundary punctuation
     t = re.sub(r'\s+', ' ', t).strip(' .,!?:;-')
     
     # Clean corrupted double/triple 's' at word endings (e.g. Lawss -> Law)
@@ -51,9 +47,12 @@ def normalize_topic_title(raw_title: str) -> str:
         cleaned_words.append(w)
     t = " ".join(cleaned_words)
     
-    # Title Case if not all uppercase acronym
+    # Capitalize cleanly without mangling existing capitalization
     if not t.isupper() and not any(w.isupper() and len(w) > 1 for w in t.split()):
-        t = t.title()
+        # Title case while preserving small conjunctions/prepositions
+        small_words = {"and", "or", "of", "in", "on", "at", "to", "for", "with", "a", "an", "the"}
+        words = t.split()
+        t = " ".join(w if (i > 0 and w.lower() in small_words) else w.capitalize() for i, w in enumerate(words))
     return t
 
 def extract_concepts_from_syllabus(syllabus_text: str, fallback_title: str) -> List[Tuple[str, str]]:

@@ -64,13 +64,22 @@ async function startAssessmentFlow(explicitDomain = null) {
   container.innerHTML = `<div class="p-4 text-center" style="color: #94a3b8; padding: 2rem;">Loading diagnostic questions for ${domainTitle}...</div>`;
 
   try {
-    const qCount = (domain === "deep_learning" ? 15 : 10);
+    const isCustom = domain.startsWith("custom_") || (customDomainMeta !== null);
+    const qCount = isCustom 
+      ? (customDomainMeta?.questions_count || 12) 
+      : (domain === "deep_learning" ? 15 : 10);
     const storedUser = JSON.parse(localStorage.getItem("deeplearnx_user") || "null");
-    const userId = storedUser ? storedUser.id : null;
+    const userId = storedUser ? storedUser.id : (window.currentUser ? window.currentUser.id : null);
     currentQuestions = await API.getAssessmentQuestions(qCount, domain, userId);
     if (!currentQuestions || currentQuestions.length === 0) {
-      container.innerHTML = `<div class="p-4 text-center text-red">No questions found for ${domainTitle}. Please select another domain.</div>`;
+      renderEmptyQuestionBankUI(domain, domainTitle);
       return;
+    }
+    if (currentQuestions && currentQuestions.length > 0) {
+      const actualDomain = currentQuestions[0].domain_id;
+      if (actualDomain && actualDomain !== window.currentDomain) {
+        window.currentDomain = actualDomain;
+      }
     }
     renderCurrentQuestion();
   } catch (err) {
@@ -80,6 +89,14 @@ async function startAssessmentFlow(explicitDomain = null) {
 
 function renderCurrentQuestion() {
   if (currentQIndex < 0 || currentQIndex >= currentQuestions.length) return;
+
+  // Restore elements that may have been hidden during empty-bank synthesis
+  const qBody = document.querySelector(".question-body");
+  if (qBody) qBody.style.removeProperty("display");
+  const confSel = document.querySelector(".confidence-selector");
+  if (confSel) confSel.style.removeProperty("display");
+  const footer = document.querySelector(".quiz-footer");
+  if (footer) footer.style.removeProperty("display");
 
   const q = currentQuestions[currentQIndex];
   
@@ -346,9 +363,32 @@ async function submitAssessment() {
     }
   });
 
+  const storedUser = JSON.parse(localStorage.getItem("deeplearnx_user") || "null");
+  const userId = storedUser ? storedUser.id : (window.currentUser ? window.currentUser.id : 3);
+  const domainId = window.currentDomain || "pokemon";
+
+  let attemptToken = window.currentAttemptToken;
+  let attemptId = window.currentAttemptId;
+
+  // Ensure attempt token is present. If missing, obtain one from server to guarantee valid signed attempt
+  if (!attemptToken) {
+    try {
+      const qIds = currentQuestions.map(item => item.id);
+      const att = await API.startAssessmentAttempt(userId, domainId, qIds);
+      attemptId = att.attempt_id;
+      attemptToken = att.attempt_token;
+      window.currentAttemptId = attemptId;
+      window.currentAttemptToken = attemptToken;
+    } catch (e) {
+      console.warn("Could not obtain server attempt token:", e);
+    }
+  }
+
   const payload = {
-    user_id: window.currentUser ? window.currentUser.id : 3,
-    domain_id: window.currentDomain || "pokemon",
+    user_id: userId,
+    domain_id: domainId,
+    attempt_id: attemptId || null,
+    attempt_token: attemptToken || null,
     answers: Object.values(userAnswers)
   };
 
@@ -370,6 +410,9 @@ async function submitAssessment() {
 function displayAssessmentResults(res) {
   navigate("results");
 
+  window.currentAssessmentSessionId = res.session_id;
+  window.currentAssessmentDomainId = res.domain_id || window.currentDomain;
+
   document.getElementById("resultSessionId").textContent = res.session_id;
 
   const dl = res.deep_learning_analysis;
@@ -385,11 +428,18 @@ function displayAssessmentResults(res) {
   document.getElementById("resConcAcc").textContent = `${mets.conceptual_accuracy || 0}%`;
   document.getElementById("resAppAcc").textContent = `${mets.application_accuracy || 0}%`;
 
-  // Friendly state explanation
+  // Calibrated friendly state explanation based on actual score and application accuracy
+  const accNum = parseFloat(res.accuracy) || 0;
+  const appAccNum = parseFloat(mets.application_accuracy) || 0;
+  let miscExplanation = "You are making good progress, but specific conceptual misunderstandings were identified. Review the detailed breakdowns below to correct these key misconceptions.";
+  if (accNum < 50 || appAccNum === 0) {
+    miscExplanation = "Significant conceptual challenges were identified across this topic. Focus on the core explanations and guided remedial review below to build foundational understanding.";
+  }
+
   const friendlyExplains = {
     "Genuine Mastery": "Awesome job! You have a solid grasp of the material and can comfortably use these concepts to solve new problems.",
     "False Mastery": "You did great on the definitions, but found practical problems tricky. Practicing with real-world examples will help you master this topic!",
-    "Conceptual Misconception": "You are very close! There is just a small mix-up with one of the key rules. Review the explanation below to clear it up.",
+    "Conceptual Misconception": miscExplanation,
     "Knowledge Gap": "You need a quick refresher on an earlier foundational topic that this subject builds on. Once you review that starting topic, this will feel much easier!"
   };
   document.getElementById("resultStateExplain").textContent =
@@ -445,7 +495,9 @@ function displayAssessmentResults(res) {
     `).join("");
   }
 
-  const primaryCid = res.knowledge_gap_detection?.primary_gap_concept_id || "";
+  const primaryCid = res.knowledge_gap_detection?.primary_prerequisite_gap
+    || res.knowledge_gap_detection?.primary_gap_concept_id
+    || "";
   const activeDomain = res.domain_id || window.currentDomain || "";
 
   gapsBox.innerHTML = `
@@ -666,4 +718,322 @@ function getStateBadgeColor(state) {
 function capitalize(s) {
   if (!s) return "";
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function escapeQuotes(str) {
+  if (!str) return "";
+  return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+async function renderEmptyQuestionBankUI(domain, domainTitle) {
+  const container = document.getElementById("optionsList");
+  if (!container) return;
+
+  // Hide quiz elements while waiting for generation
+  const qBody = document.querySelector(".question-body");
+  if (qBody) qBody.style.display = "none";
+  const confSel = document.querySelector(".confidence-selector");
+  if (confSel) confSel.style.display = "none";
+  const footer = document.querySelector(".quiz-footer");
+  if (footer) footer.style.display = "none";
+  const probeSec = document.getElementById("reasoningProbeSection");
+  if (probeSec) probeSec.classList.add("hidden");
+
+  // Determine cleanest topic title
+  let cleanTopic = domainTitle || domain;
+  cleanTopic = cleanTopic.replace(/^[^\w\s]+/, '').trim(); // Remove leading emojis
+  if (cleanTopic.startsWith("custom_")) {
+    cleanTopic = cleanTopic.replace(/^custom_/, '').replace(/_/g, ' ');
+  }
+
+  // Set quiz titles
+  const titleEl = document.getElementById("quizTitle");
+  if (titleEl) titleEl.textContent = cleanTopic;
+  const badgeEl = document.getElementById("quizSubjectBadge");
+  if (badgeEl) badgeEl.textContent = cleanTopic;
+
+  container.innerHTML = `
+    <div class="empty-bank-card" style="padding: 2.25rem; background: rgba(15, 23, 42, 0.7); border: 1.5px solid rgba(99, 102, 241, 0.35); border-radius: 14px; text-align: left; box-shadow: 0 10px 28px rgba(0,0,0,0.4);">
+      <div style="display: flex; align-items: center; gap: 0.85rem; margin-bottom: 1rem;">
+        <span style="font-size: 2rem;">📚</span>
+        <div>
+          <h3 style="margin: 0; color: #f8fafc; font-size: 1.25rem; font-weight: 700;">
+            Curriculum Topic Assessment Generation
+          </h3>
+          <p style="margin: 0.2rem 0 0; color: #94a3b8; font-size: 0.85rem;">
+            DeepLearnX Universal Knowledge & Assessment Engine
+          </p>
+        </div>
+      </div>
+
+      <p style="color: #cbd5e1; font-size: 0.95rem; line-height: 1.55; margin-bottom: 1.25rem;">
+        There are currently no preloaded diagnostic questions stored for <strong>${escapeHtml(cleanTopic)}</strong>.
+        DeepLearnX can instantly research academic literature and synthesize a customized <strong>12-question diagnostic assessment</strong> complete with Two-Tier Reasoning Probes, cognitive misconception rules, and prerequisite DAG mapping.
+      </p>
+
+      <div style="margin-bottom: 1.25rem;">
+        <label style="display: block; font-size: 0.8rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.4rem;">
+          Academic Topic / Chapter Scope
+        </label>
+        <input 
+          type="text" 
+          id="emptyBankTopicInput" 
+          value="${escapeHtml(cleanTopic)}" 
+          class="form-control" 
+          style="width: 100%; padding: 0.75rem 1rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #f8fafc; font-size: 0.95rem;"
+        />
+      </div>
+
+      <details style="margin-bottom: 1.25rem; background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 0.65rem 0.85rem;">
+        <summary style="cursor: pointer; color: #818cf8; font-size: 0.85rem; font-weight: 600; user-select: none;">
+          + Add optional textbook notes, syllabus sections, or specific learning objectives
+        </summary>
+        <div style="margin-top: 0.75rem;">
+          <textarea 
+            id="emptyBankSyllabusNotes" 
+            placeholder="Paste syllabus details, textbook chapter outline, key equations, or specific concepts to emphasize..."
+            style="width: 100%; min-height: 80px; padding: 0.65rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-size: 0.88rem; font-family: inherit; resize: vertical;"
+          ></textarea>
+        </div>
+      </details>
+
+      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+        <button 
+          id="btnSynthesizeEmptyBank" 
+          class="btn btn-primary" 
+          onclick="synthesizeAndLaunchFromEmptyBank('${escapeQuotes(cleanTopic)}')"
+          style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; padding: 0.75rem 1.5rem; font-weight: 600; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;"
+        >
+          <span>🚀 Synthesize 12-Question Diagnostic Assessment</span>
+        </button>
+      </div>
+
+      <div id="emptyBankStatusBanner" style="display: none; margin-top: 1.25rem; border-radius: 8px; padding: 1rem; font-size: 0.9rem;"></div>
+    </div>
+  `;
+}
+
+async function synthesizeAndLaunchFromEmptyBank(defaultTopic) {
+  const topicInput = document.getElementById("emptyBankTopicInput");
+  const notesInput = document.getElementById("emptyBankSyllabusNotes");
+  const btn = document.getElementById("btnSynthesizeEmptyBank");
+  const statusBanner = document.getElementById("emptyBankStatusBanner");
+
+  const topicTitle = (topicInput ? topicInput.value.trim() : "") || defaultTopic;
+  const syllabusText = notesInput ? notesInput.value.trim() : "";
+
+  if (!topicTitle) {
+    alert("Please enter a topic title.");
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  if (statusBanner) {
+    statusBanner.style.display = "block";
+    statusBanner.style.background = "rgba(99, 102, 241, 0.15)";
+    statusBanner.style.border = "1px solid #6366f1";
+    statusBanner.style.color = "#c7d2fe";
+    statusBanner.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span class="spinner" style="display: inline-block; width: 18px; height: 18px; border: 2px solid #6366f1; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></span>
+        <span id="emptyBankStatusText">🔍 Live generation in progress: Researching academic knowledge for <strong>${escapeHtml(topicTitle)}</strong>...</span>
+      </div>
+    `;
+  }
+
+  const stages = [
+    `🔍 Live generation in progress: Researching academic knowledge for <strong>${escapeHtml(topicTitle)}</strong>...`,
+    `🧠 Concepts mapped: Synthesizing concept modules & prerequisite DAG for <strong>${escapeHtml(topicTitle)}</strong>...`,
+    `📝 Questions synthesized: Formulating 12 diagnostic items with Two-Tier Reasoning Probes...`,
+    `⚙️ Calibrating answer options and cognitive misconception rules...`
+  ];
+  let stageIndex = 0;
+  const stageTimer = setInterval(() => {
+    stageIndex = (stageIndex + 1) % stages.length;
+    const el = document.getElementById("emptyBankStatusText");
+    if (el) el.innerHTML = stages[stageIndex];
+  }, 1400);
+
+  try {
+    const apiKey = localStorage.getItem("deeplearnx_ai_api_key") || null;
+    const apiProvider = localStorage.getItem("deeplearnx_ai_provider") || "gemini";
+    const storedUser = JSON.parse(localStorage.getItem("deeplearnx_user") || "null");
+    const userId = storedUser ? storedUser.id : (window.currentUser ? window.currentUser.id : null);
+
+    const result = await API.customGenerateAssessment(topicTitle, syllabusText, userId, 12, apiKey, apiProvider);
+    clearInterval(stageTimer);
+
+    if (result && result.status === "ambiguous") {
+      if (typeof openAmbiguityModal === "function") {
+        openAmbiguityModal(result.ambiguities, topicTitle, syllabusText);
+      }
+      if (statusBanner) statusBanner.style.display = "none";
+      if (btn) btn.disabled = false;
+      return;
+    }
+
+    if (!window.customDomains) window.customDomains = {};
+    window.customDomains[result.domain_id] = result;
+
+    const domainSelect = document.getElementById("domainSelect");
+    if (domainSelect) {
+      const optExists = Array.from(domainSelect.options).some(o => o.value === result.domain_id);
+      if (!optExists) {
+        const newOpt = document.createElement("option");
+        newOpt.value = result.domain_id;
+        newOpt.textContent = `${result.icon || '✨'} ${result.name}`;
+        domainSelect.appendChild(newOpt);
+      }
+      domainSelect.value = result.domain_id;
+    }
+
+    if (statusBanner) {
+      statusBanner.style.background = "rgba(16, 185, 129, 0.15)";
+      statusBanner.style.border = "1px solid #10b981";
+      statusBanner.style.color = "#6ee7b7";
+      statusBanner.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;">
+          <div>
+            <strong>✨ Successfully Generated!</strong>
+            <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: #cbd5e1;">
+              Synthesized 12 diagnostic questions for <strong>${escapeHtml(result.name)}</strong>. Launching now...
+            </p>
+          </div>
+        </div>
+      `;
+    }
+
+    setTimeout(() => {
+      startAssessmentFlow(result.domain_id);
+    }, 700);
+
+  } catch (err) {
+    clearInterval(stageTimer);
+    if (btn) btn.disabled = false;
+    renderEmptyBankErrorBanner(statusBanner, topicTitle, syllabusText, err);
+  }
+}
+
+async function synthesizeEmptyBankOffline(topicTitle, syllabusText) {
+  const statusBanner = document.getElementById("emptyBankStatusBanner");
+  const btn = document.getElementById("btnSynthesizeEmptyBank");
+  if (btn) btn.disabled = true;
+
+  if (statusBanner) {
+    statusBanner.style.display = "block";
+    statusBanner.style.background = "rgba(99, 102, 241, 0.15)";
+    statusBanner.style.border = "1px solid #6366f1";
+    statusBanner.style.color = "#c7d2fe";
+    statusBanner.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span class="spinner" style="display: inline-block; width: 18px; height: 18px; border: 2px solid #6366f1; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></span>
+        <span>⚡ Generating assessment via Authentic Offline Knowledge Synthesis for <strong>${escapeHtml(topicTitle)}</strong>...</span>
+      </div>
+    `;
+  }
+
+  try {
+    const storedUser = JSON.parse(localStorage.getItem("deeplearnx_user") || "null");
+    const userId = storedUser ? storedUser.id : (window.currentUser ? window.currentUser.id : null);
+    const result = await API.customGenerateAssessment(topicTitle, syllabusText, userId, 12, null, "offline");
+
+    if (!window.customDomains) window.customDomains = {};
+    window.customDomains[result.domain_id] = result;
+
+    const domainSelect = document.getElementById("domainSelect");
+    if (domainSelect) {
+      const optExists = Array.from(domainSelect.options).some(o => o.value === result.domain_id);
+      if (!optExists) {
+        const newOpt = document.createElement("option");
+        newOpt.value = result.domain_id;
+        newOpt.textContent = `${result.icon || '✨'} ${result.name}`;
+        domainSelect.appendChild(newOpt);
+      }
+      domainSelect.value = result.domain_id;
+    }
+
+    if (statusBanner) {
+      statusBanner.style.background = "rgba(16, 185, 129, 0.15)";
+      statusBanner.style.border = "1px solid #10b981";
+      statusBanner.style.color = "#6ee7b7";
+      statusBanner.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;">
+          <div>
+            <strong>✨ Successfully Generated via Offline Knowledge Synthesis!</strong>
+            <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: #cbd5e1;">
+              Synthesized 12 diagnostic questions for <strong>${escapeHtml(result.name)}</strong>. Launching now...
+            </p>
+          </div>
+        </div>
+      `;
+    }
+
+    setTimeout(() => {
+      startAssessmentFlow(result.domain_id);
+    }, 700);
+
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    if (statusBanner) {
+      statusBanner.style.background = "rgba(239, 68, 68, 0.15)";
+      statusBanner.style.border = "1px solid #ef4444";
+      statusBanner.style.color = "#fca5a5";
+      statusBanner.innerHTML = `<strong>Offline generation failed:</strong> ${escapeHtml(err.message)}`;
+    }
+  }
+}
+
+function renderEmptyBankErrorBanner(statusBanner, topicTitle, syllabusText, err) {
+  if (!statusBanner) return;
+  const isQuota = err.quota_exhausted || (err.data && err.data.quota_exhausted) || (err.message && err.message.toLowerCase().includes("quota"));
+  if (isQuota) {
+    const retryWindow = err.retry_after || (err.data && err.data.retry_after) || "approx. 19 hours";
+    statusBanner.style.background = "rgba(245, 158, 11, 0.15)";
+    statusBanner.style.border = "1px solid #f59e0b";
+    statusBanner.style.color = "#fef3c7";
+    statusBanner.innerHTML = `
+      <div style="display: flex; flex-direction: column; gap: 0.5rem; text-align: left;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 1.25rem;">⏳</span>
+          <strong style="color: #fbbf24; font-size: 0.95rem;">Gemini Free Tier Daily Request Quota Exhausted</strong>
+        </div>
+        <p style="margin: 0; font-size: 0.85rem; color: #cbd5e1; line-height: 1.45;">
+          Google's Free Tier daily limit has been reached. Quota resets in <strong style="color: #67e8f9;">${retryWindow}</strong>.
+          Under DeepLearnX educational integrity rules, failed live generation is <strong>never silently replaced</strong> with generic questions.
+        </p>
+        <div style="display: flex; gap: 0.5rem; margin-top: 0.35rem; flex-wrap: wrap;">
+          <button class="btn btn-sm" onclick="synthesizeEmptyBankOffline('${escapeQuotes(topicTitle)}', '${escapeQuotes(syllabusText)}')" style="font-size: 0.8rem; background: rgba(99, 102, 241, 0.25); border: 1px solid #6366f1; color: #c7d2fe; cursor: pointer; border-radius: 6px; padding: 0.35rem 0.75rem;">
+            ⚡ Generate with Offline Knowledge Synthesis
+          </button>
+        </div>
+      </div>
+    `;
+  } else if (err.status === 400 || (err.data && err.data.detail && err.data.detail.includes("Invalid or meaningless"))) {
+    statusBanner.style.background = "rgba(239, 68, 68, 0.15)";
+    statusBanner.style.border = "1px solid #ef4444";
+    statusBanner.style.color = "#fca5a5";
+    statusBanner.innerHTML = `<strong>Invalid Topic:</strong> ${escapeHtml(err.message || err.data.detail)}. Please provide a recognizable academic subject or chapter title.`;
+  } else {
+    statusBanner.style.background = "rgba(239, 68, 68, 0.15)";
+    statusBanner.style.border = "1px solid #ef4444";
+    statusBanner.style.color = "#fca5a5";
+    statusBanner.innerHTML = `
+      <strong>Generation Failed:</strong> ${escapeHtml(err.message)}
+      <div style="margin-top: 0.5rem;">
+        <button class="btn btn-sm" onclick="synthesizeEmptyBankOffline('${escapeQuotes(topicTitle)}', '${escapeQuotes(syllabusText)}')" style="font-size: 0.8rem; background: rgba(99, 102, 241, 0.25); border: 1px solid #6366f1; color: #c7d2fe; cursor: pointer; border-radius: 6px; padding: 0.35rem 0.75rem;">
+          ⚡ Fallback to Offline Knowledge Synthesis
+        </button>
+      </div>
+    `;
+  }
 }

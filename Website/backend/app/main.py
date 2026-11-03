@@ -11,6 +11,7 @@ Main backend server connecting:
 
 import os
 import sys
+import re
 import json
 import uuid
 import sqlite3
@@ -18,7 +19,7 @@ import hashlib
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
-from fastapi import FastAPI, HTTPException, Depends, Query, status, UploadFile, File, Response
+from fastapi import FastAPI, HTTPException, Depends, Query, Header, status, UploadFile, File, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -40,6 +41,15 @@ from attempt_manager import (
     verify_assessment_attempt,
     mark_attempt_submitted,
     init_attempt_tables
+)
+from oauth_verifier import (
+    authenticate_oauth_payload,
+    OAuthVerificationError,
+    create_user_session,
+    verify_user_session,
+    revoke_user_session,
+    is_production,
+    get_google_client_id
 )
 
 try:
@@ -68,6 +78,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Assessment-Attempt-Id", "X-Assessment-Attempt-Token"],
 )
 
 # Helper for password hashing
@@ -88,10 +99,15 @@ class RegisterRequest(BaseModel):
     role: str = "student"
 
 class OAuthLoginRequest(BaseModel):
-    provider: str  # "google", "microsoft"
-    email: str
-    full_name: str
+    provider: str = "google"
+    credential: Optional[str] = None  # Google Identity Services signed ID token (JWT)
+    email: Optional[str] = None       # Ignored when credential is present
+    full_name: Optional[str] = None   # Ignored when credential is present
     avatar_url: Optional[str] = None
+    is_dev_mock: bool = False
+
+class LogoutRequest(BaseModel):
+    token: Optional[str] = None
 
 class QuestionAnswer(BaseModel):
     question_id: str
@@ -173,12 +189,30 @@ def login(req: LoginRequest):
 @app.post("/api/auth/oauth-login")
 def oauth_login(req: OAuthLoginRequest):
     """
-    Seamless OAuth handler for Google and Microsoft SSO authentication.
-    Automatically finds or provisions user profile and logs them in.
+    Cryptographically secure OAuth handler for Google Identity Services.
+    - If credential (JWT) is present: verifies signature, issuer, audience, and email_verified.
+      The authenticated email is strictly extracted from verified token claims.
+    - If credential is absent: strictly forbidden in production (HTTP 403).
+      In development, allows controlled demo simulation with is_dev_mock=True.
+    - Never allows privilege escalation to faculty/admin.
+    - Issues server-tracked session tokens via user_sessions table.
     """
+    try:
+        auth_claims = authenticate_oauth_payload(
+            provider=req.provider,
+            credential=req.credential,
+            email=req.email,
+            full_name=req.full_name,
+            is_dev_mock=req.is_dev_mock
+        )
+    except OAuthVerificationError as ove:
+        raise HTTPException(status_code=ove.status_code, detail=ove.message)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"OAuth verification error: {str(e)}")
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    clean_email = req.email.strip().lower()
+    clean_email = auth_claims["email"]
     
     user = cursor.execute(
         "SELECT id, username, email, full_name, role FROM users WHERE LOWER(email) = ?",
@@ -186,18 +220,18 @@ def oauth_login(req: OAuthLoginRequest):
     ).fetchone()
     
     if not user:
-        # Auto-provision new account for Google / Microsoft user
+        # Auto-provision new account for Google user (ALWAYS as 'student')
         base_username = clean_email.split("@")[0]
         cleaned_username = "".join(c for c in base_username if c.isalnum() or c == "_") or "student"
-        # Check collision
         existing = cursor.execute("SELECT id FROM users WHERE username = ?", (cleaned_username,)).fetchone()
         if existing:
             cleaned_username = f"{cleaned_username}_{uuid.uuid4().hex[:4]}"
             
         dummy_hash = hash_pw(f"oauth_{req.provider}_{uuid.uuid4().hex}")
+        full_name_to_use = auth_claims["full_name"] or cleaned_username
         cursor.execute(
             "INSERT INTO users (username, email, full_name, password_hash, role) VALUES (?, ?, ?, ?, ?)",
-            (cleaned_username, clean_email, req.full_name.strip(), dummy_hash, "student")
+            (cleaned_username, clean_email, full_name_to_use, dummy_hash, "student")
         )
         conn.commit()
         user_id = cursor.lastrowid
@@ -205,10 +239,11 @@ def oauth_login(req: OAuthLoginRequest):
             "id": user_id,
             "username": cleaned_username,
             "email": clean_email,
-            "full_name": req.full_name.strip(),
+            "full_name": full_name_to_use,
             "role": "student"
         }
     else:
+        # Existing user - preserve their role (never allow role override via OAuth)
         user_data = {
             "id": user["id"],
             "username": user["username"],
@@ -217,12 +252,56 @@ def oauth_login(req: OAuthLoginRequest):
             "role": user["role"]
         }
         
+    session_token = create_user_session(conn, user_data["id"], auth_method=auth_claims["auth_method"])
     conn.close()
+    
     return {
         "status": "success",
-        "provider": req.provider,
+        "provider": auth_claims["provider"],
+        "auth_method": auth_claims["auth_method"],
+        "is_mock": auth_claims.get("is_mock", False),
         "user": user_data,
-        "token": f"oauth-{req.provider}-{user_data['id']}-{uuid.uuid4().hex[:8]}"
+        "token": session_token
+    }
+
+@app.post("/api/auth/logout")
+def logout_endpoint(req: Optional[LogoutRequest] = None):
+    """
+    Revokes the active user session token on the server.
+    """
+    if req and req.token:
+        conn = get_db_connection()
+        revoke_user_session(conn, req.token)
+        conn.close()
+    return {"status": "success", "message": "Logged out successfully"}
+
+@app.get("/api/auth/session")
+def get_session(token: Optional[str] = Query(None)):
+    """
+    Validates an active session token and returns the current user profile.
+    """
+    if not token:
+        raise HTTPException(status_code=401, detail="Session token required")
+    conn = get_db_connection()
+    user = verify_user_session(conn, token)
+    conn.close()
+    if not user:
+        raise HTTPException(status_code=401, detail="Session expired or invalid")
+    return {"status": "success", "user": user}
+
+@app.get("/api/auth/oauth-config")
+def get_oauth_config():
+    """
+    Returns public OAuth configuration and environment mode for frontend initialization.
+    """
+    client_id = get_google_client_id()
+    prod = is_production()
+    return {
+        "google_enabled": True,
+        "google_client_id_configured": client_id is not None,
+        "google_client_id": client_id,
+        "production_mode": prod,
+        "mock_oauth_allowed": not prod
     }
 
 @app.get("/api/user/profile/{user_id}")
@@ -483,31 +562,136 @@ def get_student_knowledge_map(user_id: int, domain: str = "deep_learning", sessi
 
 # ----------------- ASSESSMENT ENDPOINTS -----------------
 
+@app.get("/api/assessment/resolve-topic")
+def resolve_topic_endpoint(topic: str = Query(...)):
+    """
+    Resolves an academic topic or curriculum chapter against canonical and custom question banks.
+    Distinguishes preloaded chapter questions from subjects requiring on-demand synthesis.
+    """
+    if not topic or not topic.strip():
+        raise HTTPException(status_code=400, detail="Topic cannot be empty")
+        
+    try:
+        from curriculum_resolver import resolve_curriculum_domain
+    except ImportError:
+        try:
+            from app.curriculum_resolver import resolve_curriculum_domain
+        except ImportError:
+            from backend.app.curriculum_resolver import resolve_curriculum_domain
+
+    res = resolve_curriculum_domain(topic.strip())
+    
+    q_count = 0
+    if res.canonical_domain_id:
+        conn = get_db_connection()
+        try:
+            if res.matched_concept_ids:
+                pl = ",".join("?" for _ in res.matched_concept_ids)
+                q_count = conn.execute(
+                    f"SELECT COUNT(*) FROM questions WHERE domain_id = ? AND concept_id IN ({pl}) AND (is_published = 1 OR is_published IS NULL)",
+                    [res.canonical_domain_id] + res.matched_concept_ids
+                ).fetchone()[0]
+            else:
+                q_count = conn.execute(
+                    "SELECT COUNT(*) FROM questions WHERE domain_id = ? AND (is_published = 1 OR is_published IS NULL)",
+                    (res.canonical_domain_id,)
+                ).fetchone()[0]
+        finally:
+            conn.close()
+
+    return {
+        "raw_input": res.raw_input,
+        "board": res.board,
+        "grade": res.grade,
+        "subject": res.subject,
+        "chapter": res.chapter,
+        "clean_topic": res.clean_topic,
+        "canonical_domain_id": res.canonical_domain_id,
+        "matched_concept_ids": res.matched_concept_ids,
+        "match_type": res.match_type,
+        "has_preloaded_questions": (q_count > 0),
+        "preloaded_question_count": q_count,
+        "resolution_message": res.resolution_message,
+        "suggested_action": "launch" if q_count > 0 else "auto_generate"
+    }
+
 @app.get("/api/assessment/questions")
 def get_assessment_questions(
     response: Response,
-    limit: int = 10,
+    limit: Optional[int] = None,
     domain: str = "deep_learning",
     user_id: Optional[int] = None
 ):
     """
-    Returns balanced diagnostic assessment questions for the chosen domain.
-    If user_id is provided, guarantees non-repeating questions across consecutive test attempts
-    by prioritizing questions the user has NOT previously answered in this domain.
+    Returns balanced diagnostic assessment questions for the chosen domain or curriculum chapter.
+    Uses Universal Curriculum Resolution:
+    - If a specific chapter is requested (e.g. "Class 10 NCERT Chemistry - Chemical Reactions"),
+      filters strictly to that chapter's concept(s), eliminating cross-subject contamination.
+    - If user_id is provided, guarantees non-repeating questions across consecutive test attempts.
+    - If no preloaded questions exist, returns [] with X-Suggested-Action=auto_generate headers.
     """
+    try:
+        from curriculum_resolver import resolve_curriculum_domain
+    except ImportError:
+        try:
+            from app.curriculum_resolver import resolve_curriculum_domain
+        except ImportError:
+            from backend.app.curriculum_resolver import resolve_curriculum_domain
+
+    resolution = resolve_curriculum_domain(domain)
+    effective_domain = resolution.canonical_domain_id
+    concept_filter = resolution.matched_concept_ids or []
+
+    def _safe_hdr(val: Any) -> str:
+        s = str(val or "")
+        return s.replace('\u2013', '-').replace('\u2014', '-').encode('ascii', 'replace').decode('ascii')
+
+    # If unmatched or unmatched_chapter (no preloaded questions for this chapter), return empty with headers
+    if resolution.match_type in ["unmatched", "unmatched_chapter"] or not effective_domain:
+        response.headers["X-Resolved-Domain"] = _safe_hdr(effective_domain or "")
+        response.headers["X-Resolved-Concepts"] = ""
+        response.headers["X-Curriculum-Topic"] = _safe_hdr(resolution.clean_topic or domain)
+        response.headers["X-Curriculum-Match-Type"] = _safe_hdr(resolution.match_type)
+        response.headers["X-Suggested-Action"] = "auto_generate"
+        response.headers["X-Resolution-Message"] = _safe_hdr(resolution.resolution_message)
+        return []
+
+    # Custom domains synthesize 12 diagnostic questions by default; DL has 15; others default to 10
+    if limit is None or limit <= 0:
+        if effective_domain.startswith("custom_"):
+            actual_limit = 12
+        elif effective_domain == "deep_learning":
+            actual_limit = 15
+        else:
+            actual_limit = 10
+    else:
+        if effective_domain.startswith("custom_") and limit < 12:
+            actual_limit = 12
+        else:
+            actual_limit = limit
+
+    limit = actual_limit
     conn = get_db_connection()
     cursor = conn.cursor()
     
     selected_rows = []
     
+    # Base WHERE clause
+    base_where = "q.domain_id = ? AND (q.is_published = 1 OR q.is_published IS NULL)"
+    base_params = [effective_domain]
+    if concept_filter:
+        c_pl = ",".join("?" for _ in concept_filter)
+        base_where += f" AND q.concept_id IN ({c_pl})"
+        base_params.extend(concept_filter)
+
     if user_id:
-        # Prioritize questions unseen by this user in this domain
-        unseen_rows = cursor.execute("""
+        # Prioritize questions unseen by this user in this domain & concept scope
+        unseen_query = f"""
             SELECT q.id, q.domain_id, q.concept_id, q.question_type, q.difficulty, q.question_text,
                    q.option_a, q.option_b, q.option_c, q.option_d, q.reasoning_probe, c.name as concept_name
             FROM questions q
             JOIN concepts c ON q.concept_id = c.id
-            WHERE q.domain_id = ?
+            WHERE {base_where}
               AND q.id NOT IN (
                   SELECT sr.question_id
                   FROM student_responses sr
@@ -516,13 +700,13 @@ def get_assessment_questions(
               )
             ORDER BY RANDOM()
             LIMIT ?
-        """, (domain, user_id, domain, limit)).fetchall()
-        
+        """
+        unseen_params = list(base_params) + [user_id, effective_domain, limit]
+        unseen_rows = cursor.execute(unseen_query, unseen_params).fetchall()
         for r in unseen_rows:
             selected_rows.append(r)
 
-    # If user_id wasn't provided or unseen questions are fewer than the requested limit,
-    # fill the remaining slots from the full domain pool (excluding questions already in this batch)
+    # Fill remaining slots from full domain/concept pool
     remaining_needed = limit - len(selected_rows)
     if remaining_needed > 0:
         already_picked = [r["id"] for r in selected_rows]
@@ -533,23 +717,25 @@ def get_assessment_questions(
                        q.option_a, q.option_b, q.option_c, q.option_d, q.reasoning_probe, c.name as concept_name
                 FROM questions q
                 JOIN concepts c ON q.concept_id = c.id
-                WHERE q.domain_id = ?
+                WHERE {base_where}
                   AND q.id NOT IN ({placeholders})
                 ORDER BY RANDOM()
                 LIMIT ?
             """
-            extra_rows = cursor.execute(fallback_query, [domain] + already_picked + [remaining_needed]).fetchall()
+            extra_params = list(base_params) + already_picked + [remaining_needed]
+            extra_rows = cursor.execute(fallback_query, extra_params).fetchall()
         else:
-            fallback_query = """
+            fallback_query = f"""
                 SELECT q.id, q.domain_id, q.concept_id, q.question_type, q.difficulty, q.question_text,
                        q.option_a, q.option_b, q.option_c, q.option_d, q.reasoning_probe, c.name as concept_name
                 FROM questions q
                 JOIN concepts c ON q.concept_id = c.id
-                WHERE q.domain_id = ?
+                WHERE {base_where}
                 ORDER BY RANDOM()
                 LIMIT ?
             """
-            extra_rows = cursor.execute(fallback_query, (domain, remaining_needed)).fetchall()
+            extra_params = list(base_params) + [remaining_needed]
+            extra_rows = cursor.execute(fallback_query, extra_params).fetchall()
 
         for r in extra_rows:
             selected_rows.append(r)
@@ -563,7 +749,6 @@ def get_assessment_questions(
             try:
                 rp_parsed = json.loads(r["reasoning_probe"])
                 if isinstance(rp_parsed, dict):
-                    # Sanitize: client receives probe prompt and options, never answer key
                     rp_data = {
                         "prompt": rp_parsed.get("prompt") or rp_parsed.get("probe_question") or "",
                         "options": rp_parsed.get("options") or {}
@@ -576,7 +761,7 @@ def get_assessment_questions(
             "domain_id": r["domain_id"],
             "concept_id": r["concept_id"],
             "concept_name": r["concept_name"],
-            "question_type": r["question_type"], # basic, conceptual, application
+            "question_type": r["question_type"],
             "difficulty": r["difficulty"],
             "question_text": r["question_text"],
             "options": {
@@ -588,7 +773,15 @@ def get_assessment_questions(
             "reasoning_probe": rp_data
         })
 
-    # Phase 1: Server-issued assessment attempt token (non-blocking for legacy anonymous queries)
+    # Response Metadata Headers
+    response.headers["X-Resolved-Domain"] = _safe_hdr(effective_domain)
+    response.headers["X-Resolved-Concepts"] = _safe_hdr(",".join(concept_filter))
+    response.headers["X-Curriculum-Topic"] = _safe_hdr(resolution.clean_topic or domain)
+    response.headers["X-Curriculum-Match-Type"] = _safe_hdr(resolution.match_type)
+    response.headers["X-Suggested-Action"] = "ready" if questions else "auto_generate"
+    response.headers["X-Resolution-Message"] = _safe_hdr(resolution.resolution_message)
+
+    # Server-issued assessment attempt token
     if user_id and questions:
         try:
             conn_att = get_db_connection()
@@ -596,7 +789,7 @@ def get_assessment_questions(
             att = create_assessment_attempt(
                 conn=conn_att,
                 user_id=user_id,
-                domain_id=domain,
+                domain_id=effective_domain,
                 question_ids=q_ids
             )
             response.headers["X-Assessment-Attempt-Id"] = att["attempt_id"]
@@ -702,6 +895,13 @@ def custom_generate_assessment(req: CustomGenerateRequest):
     if not req.topic_title or not req.topic_title.strip():
         raise HTTPException(status_code=400, detail="Topic title is required")
 
+    # Reject purely numeric or symbolic input
+    if not re.search(r'[a-zA-Z]{2,}', req.topic_title):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid or meaningless topic '{req.topic_title}': Academic topic must contain recognizable subject terminology rather than purely numeric or symbolic input."
+        )
+
     # Ambiguity check: if user entered an ambiguous term without selecting disambiguation or providing specific context
     if not req.selected_disambiguation:
         try:
@@ -720,6 +920,8 @@ def custom_generate_assessment(req: CustomGenerateRequest):
                 topic=req.topic_title.strip(),
                 syllabus_text=req.syllabus_text or ""
             )
+            if _interp.discipline == "Invalid Academic Topic":
+                raise HTTPException(status_code=400, detail=_interp.scope)
             if _interp.is_ambiguous:
                 return {
                     "status": "ambiguous",
@@ -902,6 +1104,12 @@ def submit_assessment(sub: AssessmentSubmission):
             conn.close()
             raise HTTPException(status_code=400, detail=f"Invalid assessment attempt: {reason}")
         verified_attempt_id = att_info["attempt_id"]
+    elif sub.domain_id.startswith("custom_"):
+        conn.close()
+        raise HTTPException(
+            status_code=400,
+            detail="Missing assessment attempt token: Newly issued custom assessments must be submitted with a server-issued attempt token."
+        )
 
     # Format answers for predictor
     ans_dicts = [a.model_dump() for a in sub.answers]
@@ -1002,7 +1210,8 @@ def submit_assessment(sub: AssessmentSubmission):
         misc_info = None
         detected_misc_ids = {m["id"] for m in dl_result.get("detected_misconceptions", []) if isinstance(m, dict)}
         if not is_corr and q_row["misconception_id"] and q_row["misc_name"]:
-            if (q_row["misconception_id"] in detected_misc_ids) or q_row["question_type"] in ["conceptual", "application"]:
+            # Only assign misconception if confirmed by the cognitive state detector (e.g. failed reasoning probe, deliberate miss)
+            if q_row["misconception_id"] in detected_misc_ids:
                 misc_info = {
                     "id": q_row["misconception_id"],
                     "name": q_row["misc_name"],
@@ -1061,6 +1270,7 @@ def submit_assessment(sub: AssessmentSubmission):
     return {
         "status": "success",
         "session_id": session_id,
+        "domain_id": sub.domain_id,
         "attempt_id": verified_attempt_id,
         "score": score,
         "total_questions": total_q,
@@ -1077,6 +1287,7 @@ def submit_assessment(sub: AssessmentSubmission):
         },
         "knowledge_gap_detection": {
             "primary_prerequisite_gap": primary_gap_id,
+            "primary_gap_concept_id": primary_gap_id,
             "primary_gap_name": primary_gap_name,
             "root_prerequisite_gaps": graph_eval["root_prerequisite_gaps"],
             "node_status_map": graph_eval["node_status_map"],
@@ -1228,15 +1439,26 @@ def get_remedial_questions(concept_id: str = "", count: int = 3, domain: str = "
     
     rows = []
     if concept_id:
-        rows = conn.execute("""
-            SELECT q.id, q.domain_id, q.concept_id, q.question_type, q.difficulty, q.question_text,
-                   q.option_a, q.option_b, q.option_c, q.option_d, c.name as concept_name
-            FROM questions q
-            JOIN concepts c ON q.concept_id = c.id
-            WHERE q.concept_id = ?
-            ORDER BY q.question_type ASC
-            LIMIT ?
-        """, (concept_id, count)).fetchall()
+        if target_domain:
+            rows = conn.execute("""
+                SELECT q.id, q.domain_id, q.concept_id, q.question_type, q.difficulty, q.question_text,
+                       q.option_a, q.option_b, q.option_c, q.option_d, c.name as concept_name
+                FROM questions q
+                JOIN concepts c ON q.concept_id = c.id
+                WHERE q.concept_id = ? AND q.domain_id = ?
+                ORDER BY q.question_type ASC
+                LIMIT ?
+            """, (concept_id, target_domain, count)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT q.id, q.domain_id, q.concept_id, q.question_type, q.difficulty, q.question_text,
+                       q.option_a, q.option_b, q.option_c, q.option_d, c.name as concept_name
+                FROM questions q
+                JOIN concepts c ON q.concept_id = c.id
+                WHERE q.concept_id = ?
+                ORDER BY q.question_type ASC
+                LIMIT ?
+            """, (concept_id, count)).fetchall()
 
     if not target_domain and rows:
         target_domain = rows[0]["domain_id"]
@@ -1262,6 +1484,7 @@ def get_remedial_questions(concept_id: str = "", count: int = 3, domain: str = "
                 FROM questions q
                 JOIN concepts c ON q.concept_id = c.id
                 WHERE q.domain_id = ?
+                  AND (q.is_published = 1 OR q.is_published IS NULL)
                 ORDER BY RANDOM()
                 LIMIT ?
             """, (target_domain, needed)).fetchall()
@@ -1306,16 +1529,43 @@ def submit_remedial(sub: RemedialSubmission):
     Submits remedial drill:
     If student passes remedial drill (>=66%), their status for the target concept
     is upgraded to 'mastered' in the concept mastery map!
+    Validates ownership of original_session_id and authentic domain matching.
     """
+    if not sub.original_session_id:
+        raise HTTPException(status_code=400, detail="original_session_id is required for remedial submission.")
+
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # Verify original session existence and ownership
+    orig_session = cursor.execute(
+        "SELECT user_id, domain_id, accuracy, score, total_questions, concept_mastery_map FROM assessment_sessions WHERE id = ?",
+        (sub.original_session_id,)
+    ).fetchone()
+    if not orig_session:
+        conn.close()
+        raise HTTPException(status_code=404, detail=f"Original assessment session '{sub.original_session_id}' not found.")
+
+    if orig_session["user_id"] != sub.user_id:
+        conn.close()
+        raise HTTPException(
+            status_code=403,
+            detail=f"Access denied: Assessment session '{sub.original_session_id}' belongs to another student."
+        )
+
+    if orig_session["domain_id"] != sub.domain_id:
+        conn.close()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Domain mismatch: Session '{sub.original_session_id}' belongs to domain '{orig_session['domain_id']}', not '{sub.domain_id}'."
+        )
+
     score = 0
     total = len(sub.answers)
     
     for a in sub.answers:
         q = cursor.execute("SELECT correct_option FROM questions WHERE id = ?", (a.question_id,)).fetchone()
-        if q and a.selected_option.upper() == q["correct_option"].upper():
+        if q and a.selected_option and q["correct_option"] and a.selected_option.upper() == q["correct_option"].upper():
             score += 1
             
     pct = (score / total) * 100 if total > 0 else 0
@@ -1330,17 +1580,15 @@ def submit_remedial(sub: RemedialSubmission):
     """, (remedial_id, sub.user_id, sub.domain_id, sub.original_session_id, sub.target_concept_id, score, total, updated_status))
     
     # Fetch pre-test accuracy from original session for authentic normalized learning gain
-    orig_session = cursor.execute(
-        "SELECT accuracy, score, total_questions, concept_mastery_map FROM assessment_sessions WHERE id = ?",
-        (sub.original_session_id,)
-    ).fetchone()
-    pre_acc_pct = float(orig_session["accuracy"]) if orig_session else 0.0
+    pre_acc_pct = float(orig_session["accuracy"]) if orig_session["accuracy"] is not None else 0.0
     pre_acc = pre_acc_pct / 100.0
     post_acc = (score / total) if total > 0 else 0.0
     post_acc_pct = post_acc * 100.0
 
     # Authentic Hake's normalized learning gain: (Post - Pre) / (1 - Pre)
-    if pre_acc >= 1.0:
+    if total == 0:
+        normalized_gain = "not_estimable"
+    elif pre_acc >= 1.0:
         normalized_gain = 1.0 if post_acc >= 1.0 else 0.0
     else:
         raw_gain = (post_acc - pre_acc) / (1.0 - pre_acc)
@@ -1349,7 +1597,8 @@ def submit_remedial(sub: RemedialSubmission):
     # If passed, update the original session's concept_mastery_map so the graph map turns GREEN!
     if passed and orig_session:
         c_map = json.loads(orig_session["concept_mastery_map"] or "{}")
-        c_map[sub.target_concept_id] = "mastered"
+        if sub.target_concept_id:
+            c_map[sub.target_concept_id] = "mastered"
         cursor.execute(
             "UPDATE assessment_sessions SET concept_mastery_map = ? WHERE id = ?",
             (json.dumps(c_map), sub.original_session_id)
@@ -1374,18 +1623,29 @@ def submit_remedial(sub: RemedialSubmission):
 # ----------------- FACULTY & ADMIN DASHBOARD ENDPOINTS -----------------
 
 @app.get("/api/faculty/dashboard")
-def get_faculty_dashboard():
+def get_faculty_dashboard(
+    token: Optional[str] = Query(None),
+    x_user_role: Optional[str] = Header(None, alias="X-User-Role"),
+    authorization: Optional[str] = Header(None, alias="Authorization")
+):
     """
     Comprehensive Faculty & Admin Analytics:
-    - Total students
-    - Average mastery score
-    - State distribution (Genuine, False, Misconception, Gap)
-    - Most difficult concepts ranking
-    - Most prevalent misconceptions
-    - Common prerequisite bottlenecks
-    - Student roster with individual reports
+    Protected route: rejects non-faculty access when token or role is supplied,
+    and requires authentication in production mode.
     """
+    auth_token = token or (authorization.replace("Bearer ", "").strip() if authorization else None)
     conn = get_db_connection()
+    if auth_token:
+        user_sess = verify_user_session(conn, auth_token)
+        if user_sess and user_sess.get("role") not in {"faculty", "admin"}:
+            conn.close()
+            raise HTTPException(status_code=403, detail="Access denied: Faculty or Admin role required.")
+    elif x_user_role and x_user_role.lower() not in {"faculty", "admin"}:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Access denied: Faculty or Admin role required.")
+    elif is_production() and not auth_token:
+        conn.close()
+        raise HTTPException(status_code=401, detail="Authentication required for Faculty Dashboard in production.")
     
     # Student counts
     students = conn.execute("SELECT id, username, full_name, email FROM users WHERE role = 'student'").fetchall()

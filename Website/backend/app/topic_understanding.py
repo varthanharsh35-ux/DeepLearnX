@@ -38,6 +38,102 @@ logger = logging.getLogger("deeplearnx.topic_understanding")
 
 # Polysemous topics requiring clarification unless disambiguated by context or notes
 AMBIGUITY_CATALOG = {
+    "transformer": [
+        {
+            "id": "transformer_deep_learning",
+            "title": "Transformer Architecture & Self-Attention (Deep Learning / NLP)",
+            "discipline": "Computer Science & AI",
+            "subdiscipline": "Deep Learning & NLP",
+            "scope": "Multi-head self-attention, positional encoding, encoder-decoder transformers, BERT, GPT, and sequence transduction.",
+            "keywords": ["attention", "nlp", "encoder", "decoder", "gpt", "bert", "tokens", "sequence"]
+        },
+        {
+            "id": "transformer_electrical",
+            "title": "Electrical Transformers & Electromagnetic Induction (Electrical Engineering / Physics)",
+            "discipline": "Engineering & Technology",
+            "subdiscipline": "Electrical Engineering",
+            "scope": "Mutual induction, Faraday's law, primary and secondary coils, turns ratio, core losses, step-up/step-down transformers, and AC power transmission.",
+            "keywords": ["electromagnetic", "induction", "voltage", "turns", "coils", "primary", "secondary", "power", "ac"]
+        }
+    ],
+    "transformers": [
+        {
+            "id": "transformer_deep_learning",
+            "title": "Transformer Architecture & Self-Attention (Deep Learning / NLP)",
+            "discipline": "Computer Science & AI",
+            "subdiscipline": "Deep Learning & NLP",
+            "scope": "Multi-head self-attention, positional encoding, encoder-decoder transformers, BERT, GPT, and sequence transduction.",
+            "keywords": ["attention", "nlp", "encoder", "decoder", "gpt", "bert", "tokens", "sequence"]
+        },
+        {
+            "id": "transformer_electrical",
+            "title": "Electrical Transformers & Electromagnetic Induction (Electrical Engineering / Physics)",
+            "discipline": "Engineering & Technology",
+            "subdiscipline": "Electrical Engineering",
+            "scope": "Mutual induction, Faraday's law, primary and secondary coils, turns ratio, core losses, step-up/step-down transformers, and AC power transmission.",
+            "keywords": ["electromagnetic", "induction", "voltage", "turns", "coils", "primary", "secondary", "power", "ac"]
+        }
+    ],
+    "vector": [
+        {
+            "id": "vector_math",
+            "title": "Vector Spaces & Linear Algebra (Mathematics)",
+            "discipline": "Mathematics",
+            "subdiscipline": "Linear Algebra",
+            "scope": "Vector spaces, linear combinations, basis, dimension, dot product, cross product, and linear transformations."
+        },
+        {
+            "id": "vector_phys",
+            "title": "Vector Kinematics & Mechanics (Physics)",
+            "discipline": "Physics",
+            "subdiscipline": "Classical Mechanics",
+            "scope": "Vector quantities, magnitude and direction, vector addition, resolution of forces, velocity, and acceleration."
+        },
+        {
+            "id": "vector_bio",
+            "title": "Cloning Vectors & Recombinant DNA (Molecular Biology)",
+            "discipline": "Biological Sciences",
+            "subdiscipline": "Molecular Genetics & Biotechnology",
+            "scope": "Plasmids, bacteriophages, viral vectors, multiple cloning sites, selectable markers, and recombinant DNA technology."
+        },
+        {
+            "id": "vector_epid",
+            "title": "Disease Vectors & Transmission (Epidemiology)",
+            "discipline": "Public Health & Epidemiology",
+            "subdiscipline": "Infectious Disease & Parasitology",
+            "scope": "Biological and mechanical vectors, arthropod transmission (mosquitoes, ticks), pathogen reservoirs, and vector control."
+        }
+    ],
+    "vectors": [
+        {
+            "id": "vectors_math",
+            "title": "Vector Spaces & Linear Algebra (Mathematics)",
+            "discipline": "Mathematics",
+            "subdiscipline": "Linear Algebra",
+            "scope": "Vector spaces, linear combinations, basis, dimension, dot product, cross product, and linear transformations."
+        },
+        {
+            "id": "vectors_phys",
+            "title": "Vector Kinematics & Mechanics (Physics)",
+            "discipline": "Physics",
+            "subdiscipline": "Classical Mechanics",
+            "scope": "Vector quantities, magnitude and direction, vector addition, resolution of forces, velocity, and acceleration."
+        },
+        {
+            "id": "vectors_bio",
+            "title": "Cloning Vectors & Recombinant DNA (Molecular Biology)",
+            "discipline": "Biological Sciences",
+            "subdiscipline": "Molecular Genetics & Biotechnology",
+            "scope": "Plasmids, bacteriophages, viral vectors, multiple cloning sites, selectable markers, and recombinant DNA technology."
+        },
+        {
+            "id": "vectors_epid",
+            "title": "Disease Vectors & Transmission (Epidemiology)",
+            "discipline": "Public Health & Epidemiology",
+            "subdiscipline": "Infectious Disease & Parasitology",
+            "scope": "Biological and mechanical vectors, arthropod transmission (mosquitoes, ticks), pathogen reservoirs, and vector control."
+        }
+    ],
     "java": [
         {
             "id": "java_cs",
@@ -581,7 +677,20 @@ class TopicUnderstandingEngine:
         if not clean_topic:
             clean_topic = "General Academic Studies"
 
-        # Check for invalid or meaningless input (e.g. "5 5 5", purely numeric/symbolic)
+        try:
+            from topic_cache import get_topic_cache
+        except ImportError:
+            try:
+                from app.topic_cache import get_topic_cache
+            except ImportError:
+                from backend.app.topic_cache import get_topic_cache
+        _cache = get_topic_cache()
+        if not selected_disambiguation and not force_offline:
+            _cached = _cache.get_interpretation(clean_topic, syllabus_text)
+            if _cached and isinstance(_cached, dict):
+                return TopicInterpretation(**_cached)
+
+        # Check for invalid or meaningless input (purely numeric/symbolic, e.g. "5 5 5")
         has_alpha_words = bool(re.search(r'[a-zA-Z]{2,}', clean_topic))
         if not has_alpha_words:
             return TopicInterpretation(
@@ -595,6 +704,73 @@ class TopicUnderstandingEngine:
                     {"id": "clarify_academic_topic", "title": "Please provide a descriptive academic topic (e.g., Mathematics, Photosynthesis, Computer Science)", "discipline": "Clarification Required", "subdiscipline": "Input Validation", "scope": "Valid academic curriculum requires recognizable disciplinary keywords."}
                 ],
                 confidence=0.0
+            )
+
+        # Check for non-academic gibberish / keyboard smashes (e.g. "asdfghjklqwerty")
+        def _check_gibberish(txt: str) -> bool:
+            c = re.sub(r'[^a-zA-Z]', '', txt).lower()
+            if len(c) >= 6:
+                # Consonants strictly excluding y
+                consonants_no_y = r'[bcdfghjklmnpqrstvwxz]'
+                # Known valid English words with 5+ consonants
+                valid_exceptions = {"strength", "strengths", "length", "lengths", "twelfth", "twelfths", "catchphrase", "rhythm", "rhythms", "syzygy"}
+                if re.search(consonants_no_y + r'{6,}', c) and not any(v in c for v in valid_exceptions):
+                    return True
+                vowels = len(re.findall(r'[aeiouy]', c))
+                # Very low vowel ratio for a long string
+                if (vowels == 0 or (vowels / len(c) < 0.15)) and len(c) >= 7:
+                    return True
+                # Home-row or top-row keyboard smash
+                smash_patterns = ["asdf", "dfgh", "ghjk", "jklq", "qwerty", "zxcv", "xcvb", "cvbn"]
+                if any(p in c for p in smash_patterns) and len(c) >= 8:
+                    return True
+            return False
+
+        if _check_gibberish(clean_topic):
+            return TopicInterpretation(
+                original_query=topic,
+                canonical_title=clean_topic,
+                discipline="Invalid Academic Topic",
+                subdiscipline="Gibberish Input Rejected",
+                scope=f"'{clean_topic}' is not a recognized academic topic. Please enter a valid academic subject.",
+                is_ambiguous=True,
+                ambiguities=[
+                    {"id": "clarify_invalid_gibberish", "title": "Please enter a valid, recognizable academic topic (e.g., Organic Chemistry, Game Design, Operating Systems)", "discipline": "Clarification Required", "subdiscipline": "Input Validation", "scope": "DeepLearnX requires a valid disciplinary subject to construct a curriculum."}
+                ],
+                confidence=0.0
+            )
+
+        # Check for overly broad umbrella disciplines (e.g. "Science", "Engineering")
+        broad_low = clean_topic.strip().lower()
+        if broad_low in {"science", "sciences", "natural science"}:
+            return TopicInterpretation(
+                original_query=topic,
+                canonical_title="Science (Broad Umbrella Field)",
+                discipline="Natural Sciences",
+                subdiscipline="Broad Category Clarification",
+                scope="'Science' is an umbrella category. Please select a specific scientific branch to assess:",
+                is_ambiguous=True,
+                ambiguities=[
+                    {"id": "science_physics", "title": "Physics (Mechanics, Electromagnetism & Thermodynamics)", "discipline": "Physical Sciences", "subdiscipline": "Physics", "scope": "Classical mechanics, electromagnetism, optics, and thermodynamics."},
+                    {"id": "science_chem", "title": "Chemistry (Organic, Inorganic & Physical Chemistry)", "discipline": "Chemical Sciences", "subdiscipline": "Chemistry", "scope": "Chemical bonding, stoichiometry, reaction mechanisms, and thermodynamics."},
+                    {"id": "science_bio", "title": "Biology (Cellular Biology, Genetics & Ecology)", "discipline": "Biological Sciences", "subdiscipline": "Biology", "scope": "Cell structure, metabolic pathways, heredity, and ecological food webs."}
+                ],
+                confidence=0.6
+            )
+        elif broad_low in {"engineering", "applied science"}:
+            return TopicInterpretation(
+                original_query=topic,
+                canonical_title="Engineering (Broad Umbrella Field)",
+                discipline="Engineering & Technology",
+                subdiscipline="Broad Category Clarification",
+                scope="'Engineering' is an umbrella category. Please select a specific engineering discipline to assess:",
+                is_ambiguous=True,
+                ambiguities=[
+                    {"id": "eng_cs", "title": "Computer Engineering & Systems", "discipline": "Engineering", "subdiscipline": "Computer Engineering", "scope": "Computer architecture, operating systems, digital circuits, and embedded software."},
+                    {"id": "eng_mech", "title": "Mechanical Engineering & Fluid Mechanics", "discipline": "Engineering", "subdiscipline": "Mechanical Engineering", "scope": "Statics, dynamics, thermodynamics, fluid mechanics, and machine design."},
+                    {"id": "eng_ee", "title": "Electrical & Electronics Engineering", "discipline": "Engineering", "subdiscipline": "Electrical Engineering", "scope": "Circuit analysis, electromagnetic fields, semiconductor devices, and signals."}
+                ],
+                confidence=0.6
             )
 
         # 1. Check for polysemous ambiguity unless already resolved by selected_disambiguation
@@ -685,7 +861,7 @@ class TopicUnderstandingEngine:
                 if isinstance(data, dict) and "discipline" in data:
                     chosen_disc = selected_cand["discipline"] if selected_cand else data.get("discipline", category)
                     chosen_subdisc = selected_cand["subdiscipline"] if selected_cand else data.get("subdiscipline", category)
-                    return TopicInterpretation(
+                    _llm_interp = TopicInterpretation(
                         original_query=topic,
                         canonical_title=data.get("canonical_title", clean_topic.title()),
                         discipline=chosen_disc,
@@ -707,6 +883,11 @@ class TopicUnderstandingEngine:
                         category=category,
                         generation_mode="live_llm"
                     )
+                    try:
+                        _cache.set_interpretation(clean_topic, syllabus_text, _llm_interp.to_dict())
+                    except Exception:
+                        pass
+                    return _llm_interp
             except Exception as e:
                 logger.warning(f"Live LLM topic interpretation failed ({e}); falling back to offline interpretation.")
 
@@ -746,7 +927,7 @@ class TopicUnderstandingEngine:
                 if len(terms) >= 6:
                     break
 
-        return TopicInterpretation(
+        _off_interp = TopicInterpretation(
             original_query=topic,
             canonical_title=clean_topic.title(),
             discipline=discipline,
@@ -763,3 +944,8 @@ class TopicUnderstandingEngine:
             category=category,
             generation_mode="offline_knowledge_synthesis"
         )
+        try:
+            _cache.set_interpretation(clean_topic, syllabus_text, _off_interp.to_dict())
+        except Exception:
+            pass
+        return _off_interp

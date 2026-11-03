@@ -66,9 +66,16 @@ class LLMProviderManager:
         
         # Discover Gemini config
         gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        gemini_model = os.environ.get("GEMINI_MODEL") or os.environ.get("GEMINI_DEFAULT_MODEL") or "gemini-3.5-flash"
-        if gemini_model in ("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"):
-            gemini_model = "gemini-3.5-flash"
+        gemini_model = os.environ.get("GEMINI_MODEL") or os.environ.get("GEMINI_DEFAULT_MODEL") or "gemini-3.8-flash"
+        # Temporarily disallow gemini-3.6-flash, gemini-3.5-flash, and legacy models
+        disallowed_models = {
+            "gemini-3.6-flash", "gemini-3.5-flash",
+            "gemini-1.5-flash", "gemini-1.5-pro",
+            "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"
+        }
+        if gemini_model in disallowed_models:
+            gemini_model = "gemini-3.8-flash"
+
         self.gemini_config = LLMConfig(
             provider="gemini",
             api_key=gemini_key if gemini_key else None,
@@ -79,6 +86,19 @@ class LLMProviderManager:
             temperature=self.temperature
         )
         self.gemini_provider = GeminiProvider(self.gemini_config)
+
+        # Gemini Lite Fallback Provider (high headroom: 15 RPM, 500 RPD)
+        self.gemini_lite_model = os.environ.get("GEMINI_FALLBACK_MODEL") or "gemini-3.5-flash-lite"
+        self.gemini_lite_config = LLMConfig(
+            provider="gemini",
+            api_key=gemini_key if gemini_key else None,
+            model=self.gemini_lite_model,
+            request_timeout=self.request_timeout,
+            max_retries=self.max_retries,
+            fallback_enabled=self.fallback_enabled,
+            temperature=self.temperature
+        )
+        self.gemini_lite_provider = GeminiProvider(self.gemini_lite_config)
 
         # Discover OpenAI config
         openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
@@ -111,20 +131,30 @@ class LLMProviderManager:
     def get_active_provider(self) -> Optional[BaseLLMProvider]:
         """Returns the configured and prioritized provider, or None if no keys exist."""
         pref = self.provider_pref
-        if pref == "gemini":
-            if self.gemini_config.api_key and not self.gemini_config.api_key.startswith("your_"):
-                return self.gemini_provider
+        from .rate_limiter import get_request_limiter
+        limiter = get_request_limiter()
+
+        def _resolve_gemini() -> Optional[BaseLLMProvider]:
+            if not self.gemini_config.api_key or self.gemini_config.api_key.startswith("your_"):
+                return None
+            # If primary Gemini model is under daily quota circuit breaker, route to Lite
+            if not limiter.is_model_available(self.gemini_config.model):
+                if self.fallback_enabled and limiter.is_model_available(self.gemini_lite_model):
+                    return self.gemini_lite_provider
+            return self.gemini_provider
+
+        if pref in ("gemini", "auto"):
+            gemini = _resolve_gemini()
+            if gemini:
+                return gemini
+            if pref == "auto" and self.openai_config.api_key and not self.openai_config.api_key.startswith("your_"):
+                return self.openai_provider
             return None
         elif pref == "openai":
             if self.openai_config.api_key and not self.openai_config.api_key.startswith("your_"):
                 return self.openai_provider
             return None
-        else:  # 'auto'
-            if self.gemini_config.api_key and not self.gemini_config.api_key.startswith("your_"):
-                return self.gemini_provider
-            if self.openai_config.api_key and not self.openai_config.api_key.startswith("your_"):
-                return self.openai_provider
-            return None
+        return None
 
     def get_provider_for_request(
         self,
@@ -226,9 +256,42 @@ class LLMProviderManager:
             return res
         except LLMQuotaExhaustedError as qe:
             logger.warning(f"Primary provider '{primary.provider_name}' daily quota exhausted: {qe}")
-            # Safe provider failover: ONLY failover if an alternative DIFFERENT provider (e.g. OpenAI) is genuinely configured
-            # Do NOT rotate Gemini models to circumvent free-tier quota (free tier is account-level)
             if self.fallback_enabled and not api_key_override:
+                # 1. Try Gemini Lite fallback if primary was Gemini Flash
+                if primary.provider_name == "gemini" and "lite" not in (primary.config.model or "").lower():
+                    logger.info(f"Primary Gemini model '{primary.config.model}' quota exhausted. Failing over to validated fallback '{self.gemini_lite_model}'...")
+                    try:
+                        res = self.gemini_lite_provider.generate_structured(schema=schema, prompt=prompt, system_instruction=system_instruction)
+                        failover_record = {
+                            "from_provider": f"gemini ({primary.config.model})",
+                            "to_provider": f"gemini ({self.gemini_lite_model})",
+                            "primary_error": str(qe),
+                            "primary_error_type": "LLMQuotaExhaustedError",
+                            "reason": "model_quota_fallback",
+                            "timestamp": time.time(),
+                            "succeeded": True
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
+                        self.last_generation_status = "live_generation_succeeded"
+                        self.last_generation_error = None
+                        self.last_generation_time = time.time()
+                        self.total_live_generations += 1
+                        return res
+                    except Exception as lite_e:
+                        logger.warning(f"Gemini Lite fallback failed: {lite_e}")
+                        failover_record = {
+                            "from_provider": f"gemini ({primary.config.model})",
+                            "to_provider": f"gemini ({self.gemini_lite_model})",
+                            "primary_error": str(qe),
+                            "secondary_error": str(lite_e),
+                            "primary_error_type": "LLMQuotaExhaustedError",
+                            "reason": "model_quota_fallback",
+                            "timestamp": time.time(),
+                            "succeeded": False
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
                 secondary_name = "openai" if primary.provider_name == "gemini" else "gemini"
                 secondary = self.get_provider_for_request(provider_name=secondary_name)
                 if (
@@ -282,6 +345,41 @@ class LLMProviderManager:
         except (LLMNetworkError, LLMTimeoutError, LLMServerError) as e:
             logger.warning(f"Primary provider '{primary.provider_name}' transient error: {e}")
             if self.fallback_enabled and not api_key_override:
+                # 1. Fallback to Gemini Lite if primary was Gemini Flash
+                if primary.provider_name == "gemini" and "lite" not in (primary.config.model or "").lower():
+                    logger.info(f"Primary Gemini model '{primary.config.model}' transient error ({e}). Failing over to validated fallback '{self.gemini_lite_model}'...")
+                    try:
+                        res = self.gemini_lite_provider.generate_structured(schema=schema, prompt=prompt, system_instruction=system_instruction)
+                        failover_record = {
+                            "from_provider": f"gemini ({primary.config.model})",
+                            "to_provider": f"gemini ({self.gemini_lite_model})",
+                            "primary_error": str(e),
+                            "primary_error_type": type(e).__name__,
+                            "reason": "transient_service_error_fallback",
+                            "timestamp": time.time(),
+                            "succeeded": True
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
+                        self.last_generation_status = "live_generation_succeeded"
+                        self.last_generation_error = None
+                        self.last_generation_time = time.time()
+                        self.total_live_generations += 1
+                        return res
+                    except Exception as lite_e:
+                        logger.warning(f"Gemini Lite fallback also encountered error: {lite_e}")
+                        failover_record = {
+                            "from_provider": f"gemini ({primary.config.model})",
+                            "to_provider": f"gemini ({self.gemini_lite_model})",
+                            "primary_error": str(e),
+                            "secondary_error": str(lite_e),
+                            "primary_error_type": type(e).__name__,
+                            "reason": "transient_service_error_fallback",
+                            "timestamp": time.time(),
+                            "succeeded": False
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
                 secondary_name = "openai" if primary.provider_name == "gemini" else "gemini"
                 secondary = self.get_provider_for_request(provider_name=secondary_name)
                 # Ensure secondary provider is actually configured with valid credentials
@@ -354,6 +452,29 @@ class LLMProviderManager:
         except LLMQuotaExhaustedError as qe:
             logger.warning(f"Primary provider '{primary.provider_name}' text daily quota exhausted: {qe}")
             if self.fallback_enabled and not api_key_override:
+                # 1. Try Gemini Lite fallback if primary was Gemini Flash
+                if primary.provider_name == "gemini" and "lite" not in (primary.config.model or "").lower():
+                    logger.info(f"Primary Gemini model '{primary.config.model}' text quota exhausted. Failing over to validated fallback '{self.gemini_lite_model}'...")
+                    try:
+                        res = self.gemini_lite_provider.generate_text(prompt=prompt, system_instruction=system_instruction)
+                        failover_record = {
+                            "from_provider": f"gemini ({primary.config.model})",
+                            "to_provider": f"gemini ({self.gemini_lite_model})",
+                            "primary_error": str(qe),
+                            "primary_error_type": "LLMQuotaExhaustedError",
+                            "reason": "model_quota_fallback",
+                            "timestamp": time.time(),
+                            "succeeded": True
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
+                        self.last_generation_status = "live_generation_succeeded"
+                        self.last_generation_error = None
+                        self.last_generation_time = time.time()
+                        self.total_live_generations += 1
+                        return res
+                    except Exception as lite_e:
+                        logger.warning(f"Gemini Lite fallback failed: {lite_e}")
                 secondary_name = "openai" if primary.provider_name == "gemini" else "gemini"
                 secondary = self.get_provider_for_request(provider_name=secondary_name)
                 if (
@@ -404,6 +525,29 @@ class LLMProviderManager:
         except (LLMNetworkError, LLMTimeoutError, LLMServerError) as e:
             logger.warning(f"Primary provider '{primary.provider_name}' text transient error: {e}")
             if self.fallback_enabled and not api_key_override:
+                # 1. Fallback to Gemini Lite if primary was Gemini Flash
+                if primary.provider_name == "gemini" and "lite" not in (primary.config.model or "").lower():
+                    logger.info(f"Primary Gemini model '{primary.config.model}' text transient error ({e}). Failing over to validated fallback '{self.gemini_lite_model}'...")
+                    try:
+                        res = self.gemini_lite_provider.generate_text(prompt=prompt, system_instruction=system_instruction)
+                        failover_record = {
+                            "from_provider": f"gemini ({primary.config.model})",
+                            "to_provider": f"gemini ({self.gemini_lite_model})",
+                            "primary_error": str(e),
+                            "primary_error_type": type(e).__name__,
+                            "reason": "transient_service_error_fallback",
+                            "timestamp": time.time(),
+                            "succeeded": True
+                        }
+                        self.last_failover_event = failover_record
+                        self.failover_history.append(failover_record)
+                        self.last_generation_status = "live_generation_succeeded"
+                        self.last_generation_error = None
+                        self.last_generation_time = time.time()
+                        self.total_live_generations += 1
+                        return res
+                    except Exception as lite_e:
+                        logger.warning(f"Gemini Lite fallback failed: {lite_e}")
                 secondary_name = "openai" if primary.provider_name == "gemini" else "gemini"
                 secondary = self.get_provider_for_request(provider_name=secondary_name)
                 if secondary and secondary.config.api_key and secondary.config.api_key != primary.config.api_key:
@@ -476,10 +620,20 @@ class LLMProviderManager:
         else:
             computed_mode = "offline_knowledge_synthesis"
 
+        prov_label = "Offline-generated"
+        if has_live:
+            if model and "lite" in model.lower():
+                prov_label = "Lite-generated"
+            elif provider and "gemini" in provider.lower():
+                prov_label = "Gemini-generated"
+            else:
+                prov_label = f"{provider.capitalize()}-generated" if provider else "Live-generated"
+
         return {
             "overall_mode": mode if mode in ("live_llm", "offline_knowledge_synthesis", "hybrid") else computed_mode,
             "provider": provider,
             "model": model,
+            "provenance_label": prov_label,
             "topic_interpretation_source": t_src,
             "concept_generation_source": c_src,
             "dag_generation_source": d_src,
@@ -520,7 +674,10 @@ class LLMProviderManager:
         if active:
             active_provider_name = active.provider_name
             active_model = active.config.model
-            active_health = gemini_health if active_provider_name == "gemini" else openai_health
+            if active_provider_name == "gemini":
+                active_health = self.gemini_lite_provider.check_connection(force_refresh=force_refresh) if active_model == self.gemini_lite_model else gemini_health
+            else:
+                active_health = openai_health
             live_ready = active_health.reachable
 
         # Compute 8-state taxonomy

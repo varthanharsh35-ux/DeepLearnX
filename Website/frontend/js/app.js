@@ -9,7 +9,7 @@ window.currentUser = null;
 window.currentDomain = localStorage.getItem("deeplearnx_domain") || "pokemon";
 let currentRecommendations = [];
 let currentRemedialQuestions = [];
-let currentRemedialConcept = "poke_dual_types";
+let currentRemedialConcept = "";
 let tierChartInstance = null;
 let facultyDistChartInstance = null;
 let facultyDiffChartInstance = null;
@@ -23,20 +23,60 @@ const DEMO_PERSONAS = {
   admin:     { id: 1, username: "admin", full_name: "Prof. Dr. R. K. Murthy", role: "faculty" }
 };
 
-document.addEventListener("DOMContentLoaded", () => {
-  // Always initialize as unauthenticated visitor so the public Overview landing page is shown
-  window.currentUser = null;
-  localStorage.removeItem("deeplearnx_user");
+document.addEventListener("DOMContentLoaded", async () => {
+  // Restore persisted session from localStorage if present
+  const savedUserJson = localStorage.getItem("deeplearnx_user");
+  const savedToken = localStorage.getItem("deeplearnx_auth_token");
+
+  if (savedUserJson) {
+    try {
+      window.currentUser = JSON.parse(savedUserJson);
+    } catch (e) {
+      console.warn("Corrupt saved user session, resetting:", e);
+      localStorage.removeItem("deeplearnx_user");
+      window.currentUser = null;
+    }
+  } else {
+    window.currentUser = null;
+  }
 
   const domainSelect = document.getElementById("domainSelect");
   if (domainSelect) domainSelect.value = window.currentDomain;
 
   updateUserUI();
-  navigate("landing");
+
+  if (window.currentUser) {
+    if (window.currentUser.role === "faculty") {
+      navigate("faculty");
+    } else {
+      navigate("dashboard");
+    }
+  } else {
+    navigate("landing");
+  }
+
   loadModelInsights();
   loadAllDomainsFromDatabase();
   loadSavedApiKey();
+  initGoogleAuth();
 });
+
+async function initGoogleAuth() {
+  try {
+    if (typeof API !== "undefined" && API.getOAuthConfig) {
+      const config = await API.getOAuthConfig();
+      window.deeplearnxOAuthConfig = config;
+      if (config.google_client_id_configured && config.google_client_id && window.google && window.google.accounts) {
+        window.google.accounts.id.initialize({
+          client_id: config.google_client_id,
+          callback: handleGoogleCredentialResponse
+        });
+      }
+    }
+  } catch (e) {
+    console.debug("OAuth configuration initialization:", e);
+  }
+}
 
 function switchDomain(domainId) {
   window.currentDomain = domainId;
@@ -113,6 +153,10 @@ function navigate(viewName) {
   const protectedViews = ["dashboard", "graph-map", "select-subject", "recommendations", "faculty"];
   if (protectedViews.includes(viewName) && !window.currentUser) {
     viewName = "auth";
+  }
+  if (viewName === "faculty" && window.currentUser && window.currentUser.role !== "faculty") {
+    alert("Access Denied: The Faculty Analytics Dashboard requires a faculty administrator role.");
+    viewName = "dashboard";
   }
 
   const views = document.querySelectorAll(".view-section");
@@ -196,7 +240,12 @@ function switchPersona(username) {
 }
 
 function logout() {
+  const token = localStorage.getItem("deeplearnx_auth_token");
+  if (token && window.API && API.logout) {
+    API.logout(token).catch(() => {});
+  }
   localStorage.removeItem("deeplearnx_user");
+  localStorage.removeItem("deeplearnx_auth_token");
   window.currentUser = null;
   window.inspectedSessionId = null;
   updateUserUI();
@@ -297,16 +346,47 @@ function hideOAuthCustomInput() {
   if (inputView) inputView.style.display = "none";
 }
 
-async function selectOAuthAccount(provider, email, fullName) {
+async function selectOAuthAccount(provider, email, fullName, credential = null, isDevMock = true) {
   try {
-    const res = await API.oauthLogin(provider, email, fullName);
+    const apiClient = (typeof window !== "undefined" && window.API) ? window.API : (typeof API !== "undefined" ? API : null);
+    if (!apiClient) {
+      throw new Error("API client is loading or not initialized. Please refresh the browser (Ctrl + F5).");
+    }
+    const res = await apiClient.oauthLogin(provider, email, fullName, null, credential, isDevMock);
     window.currentUser = res.user;
     localStorage.setItem("deeplearnx_user", JSON.stringify(res.user));
+    if (res.token) {
+      localStorage.setItem("deeplearnx_auth_token", res.token);
+    }
     closeOAuthModal();
     updateUserUI();
     navigate("dashboard");
   } catch (err) {
     alert("Single Sign-On authentication error: " + err.message);
+  }
+}
+
+async function handleGoogleCredentialResponse(response) {
+  if (!response || !response.credential) {
+    alert("Google Identity Services: No credential received.");
+    return;
+  }
+  try {
+    const apiClient = (typeof window !== "undefined" && window.API) ? window.API : (typeof API !== "undefined" ? API : null);
+    if (!apiClient) {
+      throw new Error("API client is loading or not initialized. Please refresh the browser (Ctrl + F5).");
+    }
+    const res = await apiClient.oauthLogin("google", null, null, null, response.credential, false);
+    window.currentUser = res.user;
+    localStorage.setItem("deeplearnx_user", JSON.stringify(res.user));
+    if (res.token) {
+      localStorage.setItem("deeplearnx_auth_token", res.token);
+    }
+    closeOAuthModal();
+    updateUserUI();
+    navigate("dashboard");
+  } catch (err) {
+    alert("Google Identity Verification Failed: " + err.message);
   }
 }
 
@@ -397,6 +477,9 @@ async function handleLogin(e) {
     const res = await API.login(u, p);
     window.currentUser = res.user;
     localStorage.setItem("deeplearnx_user", JSON.stringify(window.currentUser));
+    if (res.token) {
+      localStorage.setItem("deeplearnx_auth_token", res.token);
+    }
     updateUserUI();
     if (res.user.role === "faculty") {
       navigate("faculty");
@@ -629,7 +712,9 @@ async function reflectSessionData(sessionId, isExplicitInspection = true) {
 
     // Save recommendations and remedial concept for this subject
     currentRecommendations = session.recommendations || [];
-    currentRemedialConcept = session.primary_gap_id || "ann_basics";
+    currentRemedialConcept = session.primary_gap_id || session.primary_prerequisite_gap || "";
+    window.currentAssessmentSessionId = session.id;
+    window.currentAssessmentDomainId = session.domain_id;
 
     // Render Chart.js Multi-Tier Breakdown
     renderTierChart(fm);
@@ -978,7 +1063,7 @@ async function selectAmbiguityOption(candId) {
 
 // Remedial Modal Drill
 async function openRemedialModal(conceptId, domainId) {
-  const activeDomain = domainId || window.currentDomain || "pokemon";
+  const activeDomain = domainId || window.currentAssessmentDomainId || window.currentDomain || "";
   const cId = conceptId || currentRemedialConcept || "";
   currentRemedialConcept = cId;
 
@@ -997,7 +1082,18 @@ async function openRemedialModal(conceptId, domainId) {
       API.getRemedialQuestions(cId, 3, activeDomain),
       (cId ? API.getConceptGuide(cId, activeDomain).catch(() => null) : Promise.resolve(null))
     ]);
-    currentRemedialQuestions = questions;
+    currentRemedialQuestions = questions || [];
+
+    if (!questions || questions.length === 0) {
+      content.innerHTML = `
+        <div class="p-4 text-center" style="background: rgba(99, 102, 241, 0.1); border: 1px solid #6366f1; border-radius: 8px;">
+          <h4 style="color: #a5b4fc; margin-bottom: 0.5rem;">Targeted Concept Guide</h4>
+          <p style="color: #cbd5e1; font-size: 0.9rem;">Review the concept principles and launch a fresh diagnostic assessment to verify your improved understanding.</p>
+        </div>
+      `;
+      footer.classList.add("hidden");
+      return;
+    }
 
     let guideBanner = "";
     if (guide && guide.core_idea) {
@@ -1038,21 +1134,41 @@ function closeRemedialModal() {
 
 async function submitRemedialDrill() {
   const answers = [];
+  let unselectedCount = 0;
   currentRemedialQuestions.forEach(q => {
     const selected = document.querySelector(`input[name="rem_q_${q.id}"]:checked`);
-    answers.push({
-      question_id: q.id,
-      selected_option: selected ? selected.value : "A",
-      response_time: 25.0,
-      confidence: 4
-    });
+    if (selected) {
+      answers.push({
+        question_id: q.id,
+        selected_option: selected.value,
+        response_time: 25.0,
+        confidence: 4
+      });
+    } else {
+      unselectedCount++;
+    }
   });
 
+  if (unselectedCount > 0 || answers.length === 0) {
+    alert("Please select an answer for all remedial questions before submitting.");
+    return;
+  }
+
+  const storedUser = JSON.parse(localStorage.getItem("deeplearnx_user") || "null");
+  const userId = storedUser ? storedUser.id : (window.currentUser ? window.currentUser.id : 3);
+  const activeSessionId = window.currentAssessmentSessionId;
+  const activeDomain = window.currentAssessmentDomainId || window.currentDomain || "pokemon";
+
+  if (!activeSessionId) {
+    alert("No active assessment session found to link remediation.");
+    return;
+  }
+
   const payload = {
-    user_id: window.currentUser.id,
-    domain_id: window.currentDomain || "pokemon",
-    original_session_id: "sess-demo-rahul-poke-falsemastery",
-    target_concept_id: currentRemedialConcept,
+    user_id: userId,
+    domain_id: activeDomain,
+    original_session_id: activeSessionId,
+    target_concept_id: currentRemedialConcept || (currentRemedialQuestions[0] ? currentRemedialQuestions[0].concept_id : ""),
     answers: answers
   };
 
@@ -1383,9 +1499,12 @@ async function handleCustomSyllabusSubmit(event) {
             <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: #cbd5e1;">
               Created <strong>${result.concepts_count} concepts</strong>, <strong>${result.questions_count} diagnostic questions</strong>, and registered prerequisite DAG for <strong>${result.name}</strong>.
             </p>
-            <p style="margin: 0.35rem 0 0; font-size: 0.78rem;">
-              <span class="badge" style="background: rgba(99, 102, 241, 0.25); border: 1px solid #6366f1; color: #c7d2fe; padding: 0.25rem 0.55rem; border-radius: 6px; font-weight: 500;">
-                ${result.generation_notice || (result.llm_used ? 'Generated live via Cloud LLM' : 'Generated via Authentic Offline Knowledge Synthesis')}
+            <p style="margin: 0.35rem 0 0; font-size: 0.78rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <span class="badge" style="background: ${(result.model_name || '').includes('lite') ? 'rgba(16, 185, 129, 0.25)' : (result.llm_used ? 'rgba(99, 102, 241, 0.25)' : 'rgba(245, 158, 11, 0.25)')}; border: 1px solid ${(result.model_name || '').includes('lite') ? '#10b981' : (result.llm_used ? '#6366f1' : '#f59e0b')}; color: ${(result.model_name || '').includes('lite') ? '#6ee7b7' : (result.llm_used ? '#c7d2fe' : '#fcd34d')}; padding: 0.25rem 0.55rem; border-radius: 6px; font-weight: 500;">
+                ${result.llm_used ? ((result.model_name || '').includes('lite') ? `⚡ Gemini Lite (${result.model_name})` : `✨ Google Gemini (${result.model_name || 'gemini-3.8-flash'})`) : '🌐 Authentic Offline Knowledge Synthesis'}
+              </span>
+              <span style="color: #94a3b8; font-size: 0.75rem;">
+                ${result.generation_notice || ''}
               </span>
             </p>
           </div>
@@ -1539,17 +1658,17 @@ function renderGenerationErrorBanner(statusBanner, err) {
 }
 
 window.generateWithOfflineFallback = async function() {
-  const topicInput = document.getElementById("customTopicInput");
-  const syllabusInput = document.getElementById("customSyllabusInput");
+  const topicInput = document.getElementById("customTopicTitleInput") || document.getElementById("customTopicInput");
+  const syllabusInput = document.getElementById("customSyllabusTextInput") || document.getElementById("customSyllabusInput");
   const topicTitle = topicInput ? topicInput.value.trim() : "";
   const syllabusText = syllabusInput ? syllabusInput.value.trim() : "";
   if (!topicTitle) {
     alert("Please enter a topic title first.");
     return;
   }
-  const statusBanner = document.getElementById("generationStatusBanner");
-  const btn = document.getElementById("generateCustomBtn");
-  const btnText = document.getElementById("generateCustomBtnText");
+  const statusBanner = document.getElementById("customGenStatusBanner") || document.getElementById("generationStatusBanner");
+  const btn = document.getElementById("generateSyllabusBtn") || document.getElementById("generateCustomBtn");
+  const btnText = document.getElementById("generateBtnText") || document.getElementById("generateCustomBtnText");
   if (statusBanner) {
     statusBanner.style.display = "block";
     statusBanner.style.background = "rgba(99, 102, 241, 0.15)";
@@ -1559,8 +1678,13 @@ window.generateWithOfflineFallback = async function() {
   }
   if (btn) btn.disabled = true;
   try {
-    const userId = window.currentUser ? window.currentUser.id : null;
+    const storedUser = JSON.parse(localStorage.getItem("deeplearnx_user") || "null");
+    const userId = storedUser ? storedUser.id : (window.currentUser ? window.currentUser.id : null);
     const result = await API.customGenerateAssessment(topicTitle, syllabusText, userId, 12, null, "offline");
+    if (result && result.attempt_token) {
+      window.currentAttemptId = result.attempt_id;
+      window.currentAttemptToken = result.attempt_token;
+    }
     if (statusBanner) {
       statusBanner.style.background = "rgba(16, 185, 129, 0.15)";
       statusBanner.style.border = "1px solid #10b981";

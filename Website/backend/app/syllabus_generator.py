@@ -145,6 +145,9 @@ CRITICAL RULES:
      * Multi-Root Merging: multiple independent foundations converging into an integrated concept ({{c1, c2}} -> c3 -> c4)
      * Diamond: foundational root branching into two distinct dimensions that synthesize into an advanced application (c1 -> c2, c1 -> c3, {{c2, c3}} -> c4)
    - Ensure the prerequisites strictly form a valid Directed Acyclic Graph without cycles or self-dependencies.
+5. QUESTION COUNT AND TERMINAL PUNCTUATION:
+   - Provide EXACTLY 12 questions in total (4 'basic', 4 'conceptual', and 4 'application' with reasoning_probe).
+   - Ensure every question stem, every option (A, B, C, D), and every reasoning probe option ends with proper terminal punctuation (. or ?).
 
 You MUST respond ONLY with a valid JSON object matching this schema:
 {{
@@ -237,7 +240,7 @@ You MUST respond ONLY with a valid JSON object matching this schema:
       "explanation": "Clear explanation of why option A is correct",
       "reasoning_probe": null
     }}
-    // Provide a total of 10 to 12 questions: 4 'basic', 4 'conceptual', and 3-4 'application' with reasoning_probe.
+    // Provide a total of EXACTLY 12 questions: 4 'basic', 4 'conceptual', and 4 'application' with reasoning_probe.
   ]
 }}
 """
@@ -381,8 +384,8 @@ def check_provider_status() -> Dict[str, Any]:
                 "configured": gemini_info.get("configured", bool(gemini_key)),
                 "key_masked": mask_key(gemini_key),
                 "network_reachable": gemini_info.get("reachable", False),
-                "default_model": gemini_info.get("model", os.environ.get("GEMINI_MODEL") or os.environ.get("GEMINI_DEFAULT_MODEL") or "gemini-3.5-flash"),
-                "supported_models": ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"],
+                "default_model": gemini_info.get("model", os.environ.get("GEMINI_MODEL") or os.environ.get("GEMINI_DEFAULT_MODEL") or "gemini-3.8-flash"),
+                "supported_models": ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"],
                 "last_status": gemini_info.get("last_status", "unconfigured"),
                 "message": gemini_info.get("message", "")
             },
@@ -1591,7 +1594,8 @@ class SyllabusGeneratorEngine:
 
         mgr = get_provider_manager()
         active_prov = mgr.get_active_provider()
-        has_credentials = bool(explicit_key_provided or (active_prov and active_prov.config.api_key))
+        is_offline_requested = provider in ["offline", "offline_synthesizer"]
+        has_credentials = bool(not is_offline_requested and (explicit_key_provided or (active_prov and active_prov.config.api_key)))
 
         if require_live_llm and not has_credentials:
             raise ValueError("Live LLM generation was requested, but no valid API key was found in Website/.env or request parameters. Configure GEMINI_API_KEY or OPENAI_API_KEY to proceed.")
@@ -1616,7 +1620,7 @@ class SyllabusGeneratorEngine:
             except Exception as e:
                 provider_error = str(e)
                 print(f"[AI Generator Failure via LLMProviderManager] {provider_error}")
-                if require_live_llm or explicit_key_provided:
+                if require_live_llm or explicit_key_provided or (active_prov and active_prov.config.api_key):
                     raise
 
         # 2. Check curated domain taxonomy if LLM not used or failed
@@ -1649,7 +1653,20 @@ class SyllabusGeneratorEngine:
             res["llm_used"] = llm_used
             res["llm_provider"] = provider if llm_used else None
             res["model_name"] = model_used
-            res["generation_notice"] = f"Generated live via {provider.upper()} ({model_used})." if llm_used else "Preloaded curated course catalog assessment."
+            if llm_used:
+                m_low = (model_used or "").lower()
+                if "lite" in m_low:
+                    res["generation_notice"] = f"Generated live via Google Gemini Lite ({model_used})."
+                    res["provenance_label"] = "Lite-generated"
+                elif "gemini" in (provider or "").lower():
+                    res["generation_notice"] = f"Generated live via Google Gemini ({model_used})."
+                    res["provenance_label"] = "Gemini-generated"
+                else:
+                    res["generation_notice"] = f"Generated live via {provider.upper()} ({model_used})."
+                    res["provenance_label"] = f"{provider.capitalize()}-generated"
+            else:
+                res["generation_notice"] = "Preloaded curated course catalog assessment."
+                res["provenance_label"] = "Curated-catalog"
             res["provenance"] = mgr.create_provenance_record(
                 mode="live_llm" if llm_used else "curated_preloaded_course_catalog",
                 provider=provider if llm_used else None,
@@ -1678,6 +1695,7 @@ class SyllabusGeneratorEngine:
             res["live_llm_ready"] = False
             res["llm_provider"] = None
             res["model_name"] = None
+            res["provenance_label"] = "Offline-generated"
             if provider_error:
                 res["llm_error"] = provider_error
                 res["generation_notice"] = f"API call failed ({provider_error}); generated via authentic offline domain knowledge synthesis."
@@ -1754,6 +1772,17 @@ class SyllabusGeneratorEngine:
 
         # 3. Process Questions
         import random
+        def _sanitize_terminal_punct(s):
+            if not s or not isinstance(s, str):
+                return ""
+            cl = s.strip()
+            if not cl:
+                return ""
+            st = cl.rstrip("'\"’”)]}")
+            if st and st[-1] not in '.?!':
+                return cl + '.'
+            return cl
+
         questions = []
         for i, q in enumerate(spec.get("questions", [])):
             qid = f"{domain_id}_q{i+1}"
@@ -1809,17 +1838,24 @@ class SyllabusGeneratorEngine:
                 rp_data["options"] = new_probe_opts
                 rp_data["correct_probe"] = new_probe_correct
 
+            # Sanitize terminal punctuation
+            if rp_data and "options" in rp_data and isinstance(rp_data["options"], dict):
+                for k in list(rp_data["options"].keys()):
+                    rp_data["options"][k] = _sanitize_terminal_punct(rp_data["options"][k])
+                if "prompt" in rp_data:
+                    rp_data["prompt"] = _sanitize_terminal_punct(rp_data["prompt"])
+
             questions.append({
                 "id": qid,
                 "domain_id": domain_id,
                 "concept_id": target_cid,
                 "question_type": q.get("question_type", "basic"),
                 "difficulty": q.get("difficulty", "medium"),
-                "question_text": q["question_text"],
-                "option_a": new_opt_a,
-                "option_b": new_opt_b,
-                "option_c": new_opt_c,
-                "option_d": new_opt_d,
+                "question_text": _sanitize_terminal_punct(q.get("question_text", "")),
+                "option_a": _sanitize_terminal_punct(new_opt_a),
+                "option_b": _sanitize_terminal_punct(new_opt_b),
+                "option_c": _sanitize_terminal_punct(new_opt_c),
+                "option_d": _sanitize_terminal_punct(new_opt_d),
                 "correct_option": new_correct,
                 "explanation": q.get("explanation", "Correct answer explanation."),
                 "misconception_id": misc_id,
@@ -1891,16 +1927,17 @@ class SyllabusGeneratorEngine:
         Uses universal cognitive multi-disciplinary question engine for authentic, non-repeating curricula.
         """
         try:
-            from topic_researcher import fetch_wikipedia_knowledge, synthesize_authentic_curriculum
+            from topic_researcher import fetch_multisource_academic_knowledge, synthesize_authentic_curriculum
         except ImportError:
             try:
-                from app.topic_researcher import fetch_wikipedia_knowledge, synthesize_authentic_curriculum
+                from app.topic_researcher import fetch_multisource_academic_knowledge, synthesize_authentic_curriculum
             except ImportError:
-                from backend.app.topic_researcher import fetch_wikipedia_knowledge, synthesize_authentic_curriculum
+                from backend.app.topic_researcher import fetch_multisource_academic_knowledge, synthesize_authentic_curriculum
         
-        # 1. Fetch live encyclopedic knowledge for the topic
-        print(f"[Topic Researcher] Researching factual knowledge for '{topic_title}'...")
-        articles = fetch_wikipedia_knowledge(topic_title)
+        # 1. Fetch live multi-source scholarly and encyclopedic knowledge for the topic
+        print(f"[Topic Researcher] Researching multi-source scholarly knowledge for '{topic_title}'...")
+        research_pkg = fetch_multisource_academic_knowledge(topic_title)
+        articles = research_pkg.get("articles", [])
         
         # 2. Synthesize authentic concepts, misconceptions, questions, and guides
         concepts, misconceptions, questions, concept_guides, icon, category = synthesize_authentic_curriculum(
@@ -1981,20 +2018,52 @@ class SyllabusGeneratorEngine:
                 m["description"], m["remediation"]
             ))
 
-        # 4. Insert questions
+        # 4. Insert questions with publication audit gating (Phase 6)
+        try:
+            from quiz_validator import validate_question
+        except ImportError:
+            try:
+                from app.quiz_validator import validate_question
+            except ImportError:
+                from backend.app.quiz_validator import validate_question
+
+        now = time.time()
         for q in questions:
+            is_valid, q_errs = validate_question(q, category)
+            is_pub = 1 if is_valid else 0
+            q["is_published"] = is_pub
             rp_json = json.dumps(q.get("reasoning_probe")) if q.get("reasoning_probe") else None
             cursor.execute("""
                 INSERT OR REPLACE INTO questions (
                     id, domain_id, concept_id, question_type, difficulty, question_text,
                     option_a, option_b, option_c, option_d, correct_option,
-                    explanation, misconception_id, prerequisite_id, reasoning_probe
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    explanation, misconception_id, prerequisite_id, reasoning_probe, is_published
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 q["id"], q["domain_id"], q["concept_id"], q["question_type"], q["difficulty"],
                 q["question_text"], q["option_a"], q["option_b"], q["option_c"], q["option_d"],
                 q["correct_option"], q["explanation"], q.get("misconception_id"), q.get("prerequisite_id"),
-                rp_json
+                rp_json, is_pub
+            ))
+
+            # Audit record in question_validations table
+            cursor.execute("""
+                INSERT OR REPLACE INTO question_validations (
+                    question_id, domain_id, objective_id, factual_accuracy_passed,
+                    cognitive_alignment_passed, distractor_plausibility_passed,
+                    probe_alignment_passed, is_published, validation_details,
+                    rejection_reason, validated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                q["id"], domain_id, f"lo_{q.get('concept_id')}",
+                1 if is_valid else 0,
+                1 if is_valid else 0,
+                1 if is_valid else 0,
+                1 if (q.get("reasoning_probe") is None or "correct_probe" in (q.get("reasoning_probe") or {})) else 0,
+                is_pub,
+                json.dumps({"errors": q_errs} if q_errs else {"status": "all_checks_passed"}),
+                "; ".join(q_errs) if not is_valid else None,
+                now
             ))
 
         # 5. Insert custom concept guides
@@ -2006,6 +2075,24 @@ class SyllabusGeneratorEngine:
                 g["concept_id"], g["domain_id"], g["name"], g["core_idea"],
                 g["example"], g["common_mistake"], g["key_takeaway"]
             ))
+
+        # 6. Insert versioned curriculum nodes & learning objectives (Phase 2 & 4)
+        for c in concepts:
+            node_id = f"node_{c['id']}"
+            cursor.execute("""
+                INSERT OR REPLACE INTO curriculum_nodes (
+                    id, domain_id, concept_id, title, description,
+                    cognitive_level, prerequisites, version, created_at
+                ) VALUES (?, ?, ?, ?, ?, 'understand', ?, 1, ?)
+            """, (node_id, domain_id, c["id"], c["name"], c["description"], json.dumps(c.get("prerequisites", [])), now))
+
+            lo_id = f"lo_{c['id']}"
+            cursor.execute("""
+                INSERT OR REPLACE INTO learning_objectives (
+                    id, domain_id, concept_id, node_id, objective_statement,
+                    action_verb, cognitive_level, version, created_at
+                ) VALUES (?, ?, ?, ?, ?, 'Explain', 'understand', 1, ?)
+            """, (lo_id, domain_id, c["id"], node_id, f"Understand core principles, applications, and diagnostic structures of {c['name']} in {domain_name}.", now))
 
         conn.commit()
         conn.close()

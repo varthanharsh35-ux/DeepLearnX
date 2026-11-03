@@ -37,6 +37,14 @@ from .base import (
 logger = logging.getLogger("deeplearnx.providers.gemini")
 
 try:
+    from .rate_limiter import get_request_limiter
+except ImportError:
+    try:
+        from rate_limiter import get_request_limiter
+    except ImportError:
+        from backend.app.providers.rate_limiter import get_request_limiter
+
+try:
     from google import genai
     from google.genai import types, errors
     GENAI_AVAILABLE = True
@@ -111,15 +119,23 @@ def format_retry_window(seconds_or_text: Union[float, str, None]) -> Optional[st
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini provider conforming to BaseLLMProvider."""
 
-    DEFAULT_MODEL = "gemini-3.5-flash"
+    DEFAULT_MODEL = "gemini-3.8-flash"
+    FALLBACK_MODEL = "gemini-3.5-flash-lite"
+    DISALLOWED_MODELS = {
+        "gemini-3.6-flash", "gemini-3.5-flash",
+        "gemini-1.5-flash", "gemini-1.5-pro",
+        "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"
+    }
 
     def __init__(self, config: Optional[LLMConfig] = None):
         env_model = os.environ.get("GEMINI_MODEL") or os.environ.get("GEMINI_DEFAULT_MODEL") or self.DEFAULT_MODEL
+        if env_model in self.DISALLOWED_MODELS:
+            env_model = self.DEFAULT_MODEL
         cfg = config or LLMConfig(
             provider="gemini",
             model=env_model
         )
-        if not cfg.model or cfg.model in ("gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"):
+        if not cfg.model or cfg.model in self.DISALLOWED_MODELS:
             cfg.model = env_model
         super().__init__(cfg)
         self._client: Optional[Any] = None
@@ -130,7 +146,13 @@ class GeminiProvider(BaseLLMProvider):
         if not self.config.api_key or self.config.api_key.startswith("your_") or "here" in self.config.api_key:
             raise LLMConfigurationError("GEMINI_API_KEY is not configured", provider="gemini")
         if self._client is None:
-            self._client = genai.Client(api_key=self.config.api_key)
+            timeout_sec = float(getattr(self.config, "request_timeout", 30.0) or 30.0)
+            timeout_ms = int(timeout_sec * 1000)
+            http_opts = types.HttpOptions(timeout=timeout_ms) if types and hasattr(types, "HttpOptions") else None
+            if http_opts:
+                self._client = genai.Client(api_key=self.config.api_key, http_options=http_opts)
+            else:
+                self._client = genai.Client(api_key=self.config.api_key)
         return self._client
 
     def _map_error(self, exc: Exception) -> Exception:
@@ -241,7 +263,9 @@ class GeminiProvider(BaseLLMProvider):
 
         gen_config = types.GenerateContentConfig(**config_args)
 
+        limiter = get_request_limiter()
         for attempt in range(max_retries + 1):
+            limiter.acquire(self.config.model)
             t0 = time.time()
             try:
                 response = client.models.generate_content(
@@ -297,13 +321,20 @@ class GeminiProvider(BaseLLMProvider):
             except Exception as e:
                 mapped = self._map_error(e)
                 last_error = mapped
+                retry_secs = getattr(mapped, "retry_after_seconds", None) or 5.0
+                is_daily = isinstance(mapped, LLMQuotaExhaustedError)
+                if isinstance(mapped, (LLMRateLimitError, LLMQuotaExhaustedError)):
+                    limiter.record_retry_after(self.config.model, retry_secs, is_daily_quota=is_daily)
+
+                if is_daily:
+                    logger.error(f"[Gemini] Quota exhausted (retry available in {getattr(mapped, 'retry_after', 'unknown')}). Halting retries immediately.")
+                    raise mapped
+
                 if getattr(mapped, "retryable", False) and attempt < max_retries:
                     backoff = min(1.0 * (2 ** attempt), 8.0)
                     logger.warning(f"[Gemini] Attempt {attempt+1} failed ({mapped.message}). Retrying in {backoff}s...")
                     time.sleep(backoff)
                 else:
-                    if isinstance(mapped, LLMQuotaExhaustedError):
-                        logger.error(f"[Gemini] Quota exhausted (retry available in {getattr(mapped, 'retry_after', 'unknown')}). No retries will be attempted.")
                     raise mapped
 
         raise last_error or LLMServerError("Gemini generation failed after retries", provider="gemini")
@@ -328,7 +359,9 @@ class GeminiProvider(BaseLLMProvider):
 
         gen_config = types.GenerateContentConfig(**config_args)
 
+        limiter = get_request_limiter()
         for attempt in range(max_retries + 1):
+            limiter.acquire(self.config.model)
             t0 = time.time()
             try:
                 response = client.models.generate_content(
@@ -350,12 +383,19 @@ class GeminiProvider(BaseLLMProvider):
             except Exception as e:
                 mapped = self._map_error(e)
                 last_error = mapped
+                retry_secs = getattr(mapped, "retry_after_seconds", None) or 5.0
+                is_daily = isinstance(mapped, LLMQuotaExhaustedError)
+                if isinstance(mapped, (LLMRateLimitError, LLMQuotaExhaustedError)):
+                    limiter.record_retry_after(self.config.model, retry_secs, is_daily_quota=is_daily)
+
+                if is_daily:
+                    logger.error(f"[Gemini text] Quota exhausted (retry available in {getattr(mapped, 'retry_after', 'unknown')}). Halting retries immediately.")
+                    raise mapped
+
                 if getattr(mapped, "retryable", False) and attempt < max_retries:
                     backoff = min(1.0 * (2 ** attempt), 8.0)
                     time.sleep(backoff)
                 else:
-                    if isinstance(mapped, LLMQuotaExhaustedError):
-                        logger.error(f"[Gemini text] Quota exhausted (retry available in {getattr(mapped, 'retry_after', 'unknown')}). No retries will be attempted.")
                     raise mapped
 
         raise last_error or LLMServerError("Gemini text generation failed", provider="gemini")

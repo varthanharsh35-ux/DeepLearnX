@@ -509,6 +509,9 @@ class TestEndToEndPipelineWithProviderSpy(unittest.TestCase):
             db_p = BASE_DIR / "database" / "deeplearnx.db"
             if db_p.exists():
                 conn = sqlite3.connect(str(db_p))
+                conn.execute("DELETE FROM question_validations WHERE domain_id LIKE 'custom_quantum_mechanics_%'")
+                conn.execute("DELETE FROM learning_objectives WHERE domain_id LIKE 'custom_quantum_mechanics_%'")
+                conn.execute("DELETE FROM curriculum_nodes WHERE domain_id LIKE 'custom_quantum_mechanics_%'")
                 conn.execute("DELETE FROM questions WHERE domain_id LIKE 'custom_quantum_mechanics_%'")
                 conn.execute("DELETE FROM misconceptions WHERE domain_id LIKE 'custom_quantum_mechanics_%'")
                 conn.execute("DELETE FROM concepts WHERE domain_id LIKE 'custom_quantum_mechanics_%'")
@@ -699,6 +702,9 @@ class TestEndToEndPipelineWithProviderSpy(unittest.TestCase):
                     conn = sqlite3.connect(str(db_p))
                     conn.execute("DELETE FROM student_responses WHERE session_id IN (SELECT id FROM assessment_sessions WHERE domain_id = ?)", (created_domain_id,))
                     conn.execute("DELETE FROM assessment_sessions WHERE domain_id = ?", (created_domain_id,))
+                    conn.execute("DELETE FROM question_validations WHERE domain_id = ?", (created_domain_id,))
+                    conn.execute("DELETE FROM learning_objectives WHERE domain_id = ?", (created_domain_id,))
+                    conn.execute("DELETE FROM curriculum_nodes WHERE domain_id = ?", (created_domain_id,))
                     conn.execute("DELETE FROM questions WHERE domain_id = ?", (created_domain_id,))
                     conn.execute("DELETE FROM misconceptions WHERE domain_id = ?", (created_domain_id,))
                     conn.execute("DELETE FROM custom_concept_guides WHERE domain_id = ?", (created_domain_id,))

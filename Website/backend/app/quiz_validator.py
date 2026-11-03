@@ -32,6 +32,50 @@ GENERIC_ENGINEERING_CONTAMINANTS = [
     "damping breakdown"
 ]
 
+GENERIC_SYNTHETIC_BOILERPLATE = [
+    "conduct controlled isolation experiments",
+    "double the operating load immediately",
+    "most senior team member",
+    "cosmetic terminology",
+    "arbitrarily overrides standard foundational rules",
+    "informal conversational colloquialism",
+    "unrelated secondary procedure that operates completely outside",
+    "core taxonomy & shared foundational principles",
+    "primary classification & structural dynamics",
+    "alternative typology & operational bounds",
+    "comparative synthesis & domain applications",
+    "theoretical foundation a",
+    "methodological foundation b",
+    "foundational principles & core taxonomy",
+    "primary working dynamics & operational mechanisms",
+    "contextual constraints & boundary conditions",
+    "applied problem-solving & diagnostic synthesis",
+    "foundational principles & baseline setup",
+    "intermediate processing & transformation mechanisms",
+    "advanced execution & boundary constraints",
+    "terminal verification & system synthesis",
+    "precondition omission fallacy",
+    "linear causality oversimplification",
+    "invariant context assumption",
+    "superficial symptom treatment",
+    "calibrate operating parameters back within validated boundary limits",
+    "amplify the driving stimulus sharply",
+    "which fundamental characteristic clearly distinguishes",
+    "which foundational condition or baseline criterion must be established",
+    "an analyst encounters severe system instability",
+    "when troubleshooting a failure scenario",
+    "shifting key operational parameters",
+    "dynamic governing relationships systematically propagate parameter changes",
+    "observes unexpected anomalous results when applying",
+    "systematically verify input parameters, isolate interacting factors",
+    "design controlled parameter sweeps to decouple conflicting variables",
+    "abandon systematic diagnostic protocols and rely exclusively on unverified guesswork",
+    "links structural criteria to operational dynamics through established causal pathways",
+    "it acts in complete isolation without influencing or being influenced",
+    "it reverses standard input sequences and contradicts foundational relationships",
+    "it substitutes subjective speculation in place of verifiable interactions"
+]
+
 # Prohibited cross-domain contamination terms by category
 FORBIDDEN_CONTAMINANTS = {
     "biology": [
@@ -249,6 +293,19 @@ def validate_question(q: Dict[str, Any], category: str = "") -> Tuple[bool, List
                     errors.append(f"Probe option {p_ltr} contains duplicate 'Because Because'")
         if p_corr not in ["A", "B", "C", "D"]:
             errors.append(f"Invalid probe correct_probe: {p_corr}")
+
+    # 8. Check for generic synthetic boilerplate (rejects ungrounded abstract templates)
+    all_texts = [q.get("question_text", "")] + opts
+    if rp and isinstance(rp, dict):
+        all_texts.append(rp.get("prompt", ""))
+        all_texts.extend(list(rp.get("options", {}).values()))
+    
+    for txt in all_texts:
+        t_low = (txt or "").lower()
+        for bp in GENERIC_SYNTHETIC_BOILERPLATE:
+            if bp.lower() in t_low:
+                errors.append(f"Rejected: Question contains generic synthetic boilerplate ('{bp}')")
+                break
             
     return len(errors) == 0, errors
 
@@ -349,6 +406,13 @@ def validate_curriculum_package(
     if not dag_ok:
         errors.extend(dag_errs)
         
+    # Check concept names and descriptions for generic synthetic boilerplate
+    for c in concepts:
+        c_text = (c.get("name", "") + " " + c.get("description", "")).lower()
+        for b_phrase in GENERIC_SYNTHETIC_BOILERPLATE:
+            if b_phrase in c_text:
+                errors.append(f"Generic synthetic boilerplate '{b_phrase}' detected in concept '{c.get('name')}'.")
+
     # 2. Questions count check (flexible between 8 and 15)
     if not (8 <= len(questions) <= 15):
         errors.append(f"Expected between 8 and 15 questions, got {len(questions)}.")
@@ -389,15 +453,17 @@ def balance_sentence(text: str, target_min: int = 85, target_max: int = 108, fal
     text = re.sub(r'\([^)]*\)', '', text)  # remove parenthetical clauses
     text = re.sub(r'\s+', ' ', text).strip()
     
-    # Check if text ends cleanly with punctuation
-    if not text.endswith(('.', '!', '?')):
-        text = f"{text}."
-        
     # Check for dangling endings: never leave dangling prepositions or conjunctions
     for pat in DANGLING_ENDINGS:
         if re.search(pat, text, re.IGNORECASE):
             text = re.sub(pat, '.', text).strip()
             if fallback_context:
                 text = f"{text.rstrip('.')} {fallback_context.strip()}."
+
+    # Eliminate dangling internal punctuation before final period (e.g. ',.' or '..')
+    text = re.sub(r'[,;:.]+\.', '.', text)
+    if not text.endswith(('.', '!', '?')):
+        text = f"{text}."
+    text = re.sub(r'[,;:.]+\.', '.', text)
 
     return text if text.endswith(('.', '!', '?')) else f"{text}."
