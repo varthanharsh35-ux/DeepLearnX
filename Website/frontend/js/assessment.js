@@ -92,11 +92,11 @@ function renderCurrentQuestion() {
 
   // Restore elements that may have been hidden during empty-bank synthesis
   const qBody = document.querySelector(".question-body");
-  if (qBody) qBody.style.removeProperty("display");
+  if (qBody) qBody.style.display = "block";
   const confSel = document.querySelector(".confidence-selector");
-  if (confSel) confSel.style.removeProperty("display");
+  if (confSel) confSel.style.display = "block";
   const footer = document.querySelector(".quiz-footer");
-  if (footer) footer.style.removeProperty("display");
+  if (footer) footer.style.display = "flex";
 
   const q = currentQuestions[currentQIndex];
   

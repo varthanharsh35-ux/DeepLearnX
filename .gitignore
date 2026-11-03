@@ -57,3 +57,7 @@ scratch/
 .env.*
 !.env.example
 
+
+# Raw video recordings
+Website/videos/raw/
+*.webm
